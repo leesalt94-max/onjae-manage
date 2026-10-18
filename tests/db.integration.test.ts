@@ -45,7 +45,7 @@ HMABC123,Canceled by guest,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"�
 
   it("통계 쿼리가 월을 걸친 숙박을 나눠 센다", async () => {
     const { upsertReservations } = await import("../lib/ingest");
-    const { occupancy, monthlyByChannel, summary, genderBreakdown, ageBands, upcoming, lastSyncs } = await import("../lib/stats");
+    const { occupancy, monthlyByChannel, summary, genderBreakdown, ageBands, guestCoverage, upcoming, lastSyncs } = await import("../lib/stats");
     const today = new Date();
     const y = today.getUTCFullYear();
     const m = today.getUTCMonth() + 1;
@@ -59,7 +59,7 @@ HMABC123,Canceled by guest,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"�
       guestPaid: 300000, commission: 45000, taxes: null, payoutAmount: 255000, cancelledAt: null, raw: {},
     }], "csv_upload");
     const [id] = await sql<{ id: number }[]>`SELECT id FROM reservations WHERE confirmation = 'B1'`;
-    await sql`INSERT INTO guest_profiles (reservation_id, gender, age, consented_at) VALUES (${id.id}, 'female', 34, now()), (${id.id}, 'male', 8, now())`;
+    await sql`INSERT INTO guest_profiles (reservation_id, gender, age_band) VALUES (${id.id}, 'female', '30s'), (${id.id}, 'male', 'child')`;
 
     const occ = await occupancy(sql, 1, 2);
     const thisMonth = occ.find((o) => o.month === `${y}-${pad(m)}`)!;
@@ -73,9 +73,23 @@ HMABC123,Canceled by guest,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"�
     expect(s.cancelled).toBe(1);
     expect(s.avgPartySize).toBe(2.5);
     expect(await genderBreakdown(sql, "2000-01-01", "2100-01-01")).toHaveLength(2);
-    expect((await ageBands(sql, "2000-01-01", "2100-01-01")).map((a) => a.band).sort()).toEqual(["20세 미만", "30대"]);
+    expect((await ageBands(sql, "2000-01-01", "2100-01-01")).map((a) => a.band)).toEqual(["child", "30s"]);
+    expect(await guestCoverage(sql, "2000-01-01", "2100-01-01")).toEqual({ entered: 1, total: 1 });
     await upcoming(sql, 7);
     await lastSyncs(sql);
+  });
+
+  it("사장님이 입력한 투숙객 정보는 예약마다 통째로 바뀌고, 비우면 미입력이 된다", async () => {
+    const { saveGuestProfiles, getReservationGuests } = await import("../lib/guests");
+    const [{ id }] = await sql<{ id: number }[]>`SELECT id FROM reservations WHERE confirmation = 'B1'`;
+    expect(await saveGuestProfiles(sql, id, [{ gender: "male", ageBand: "40s" }, { gender: "unknown", ageBand: "child" }])).toBe(true);
+    expect((await getReservationGuests(sql, id))?.guests).toEqual([
+      { gender: "male", age_band: "40s" },
+      { gender: "unknown", age_band: "child" },
+    ]);
+    expect(await saveGuestProfiles(sql, id, [])).toBe(true);
+    expect((await getReservationGuests(sql, id))?.guests).toEqual([]);
+    expect(await saveGuestProfiles(sql, 999999, [])).toBe(false);
   });
 
   it("로그인 정보는 암호화되어 저장되고 화면에는 가려진 아이디만 나온다", async () => {

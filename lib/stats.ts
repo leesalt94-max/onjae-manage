@@ -81,14 +81,21 @@ export async function genderBreakdown(sql: postgres.Sql, from: string, to: strin
 
 export async function ageBands(sql: postgres.Sql, from: string, to: string) {
   return sql<{ band: string; count: number }[]>`
-    SELECT CASE WHEN g.age IS NULL THEN '미입력'
-                WHEN g.age < 20 THEN '20세 미만'
-                WHEN g.age >= 60 THEN '60세 이상'
-                ELSE (g.age / 10 * 10)::text || '대' END AS band,
-           count(*)::int AS count
+    SELECT g.age_band AS band, count(*)::int AS count
     FROM guest_profiles g JOIN reservations r ON r.id = g.reservation_id
     WHERE r.check_in >= ${from} AND r.check_in < ${to}
-    GROUP BY 1 ORDER BY 1`;
+    GROUP BY 1
+    ORDER BY array_position(ARRAY['child', '10s', '20s', '30s', '40s', '50s', '60plus', 'unknown'], g.age_band)`;
+}
+
+// 성별·나이를 입력한 예약이 전체 중 얼마나 되는지 (입력 못 한 예약이 있으니 통계 해석용).
+export async function guestCoverage(sql: postgres.Sql, from: string, to: string) {
+  const [row] = await sql<{ entered: number; total: number }[]>`
+    SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM guest_profiles g WHERE g.reservation_id = r.id))::int AS entered,
+           count(*)::int AS total
+    FROM reservations r
+    WHERE r.status IN ('confirmed', 'completed') AND r.check_in >= ${from} AND r.check_in < ${to}`;
+  return row;
 }
 
 export async function upcoming(sql: postgres.Sql, days = 7) {

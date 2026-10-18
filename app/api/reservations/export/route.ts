@@ -2,7 +2,8 @@ import Papa from "papaparse";
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { currentMonth, monthRange } from "@/lib/format";
-import { GENDER_LABELS, listReservations, STATUS_LABELS } from "@/lib/reservations";
+import { AGE_LABELS, GENDER_LABELS } from "@/lib/guests";
+import { listReservations, STATUS_LABELS } from "@/lib/reservations";
 import { CHANNEL_LABELS, CHANNELS, type Channel } from "@/lib/types";
 
 export async function GET(req: Request) {
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
       수수료: r.commission ?? "",
       정산액: r.payout_amount ?? "",
       성별: r.genders?.split(",").map((g) => GENDER_LABELS[g] ?? g).join(" ") ?? "",
-      나이: r.ages?.replace(/,/g, " ") ?? "",
+      나이대: r.ages?.split(",").map((a) => AGE_LABELS[a] ?? a).join(" ") ?? "",
     })),
   );
   // 엑셀에서 한글이 깨지지 않도록 BOM 을 붙인다.

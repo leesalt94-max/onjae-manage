@@ -29,7 +29,7 @@ export async function listReservations(sql: postgres.Sql, filter: { channel?: Ch
            r.nights, r.adults, r.children, r.infants, r.currency, r.guest_paid, r.commission, r.payout_amount,
            to_char(r.booked_at, 'YYYY-MM-DD') AS booked_at,
            string_agg(g.gender, ',' ORDER BY g.id) FILTER (WHERE g.id IS NOT NULL) AS genders,
-           string_agg(coalesce(g.age::text, '?'), ',' ORDER BY g.id) FILTER (WHERE g.id IS NOT NULL) AS ages
+           string_agg(g.age_band, ',' ORDER BY g.id) FILTER (WHERE g.id IS NOT NULL) AS ages
     FROM reservations r LEFT JOIN guest_profiles g ON g.reservation_id = r.id
     WHERE r.check_in >= ${filter.from} AND r.check_in < ${filter.to}
       ${filter.channel ? sql`AND r.channel = ${filter.channel}` : sql``}
@@ -42,11 +42,4 @@ export const STATUS_LABELS: Record<string, string> = {
   completed: "완료",
   cancelled: "취소",
   no_show: "노쇼",
-};
-
-export const GENDER_LABELS: Record<string, string> = {
-  male: "남",
-  female: "여",
-  other: "기타",
-  undisclosed: "미공개",
 };

@@ -48,7 +48,7 @@ export default async function Home() {
       <div className="panel table-wrap">
         {next.length === 0 ? <p className="muted">없음</p> : (
           <table>
-            <thead><tr><th>체크인</th><th>체크아웃</th><th>채널</th><th>예약번호</th><th className="num">인원</th><th>게스트 정보</th></tr></thead>
+            <thead><tr><th>체크인</th><th>체크아웃</th><th>채널</th><th>예약번호</th><th className="num">인원</th><th>성별·나이</th></tr></thead>
             <tbody>
               {next.map((r) => (
                 <tr key={r.id}>
@@ -56,7 +56,7 @@ export default async function Home() {
                   <td><span className={`badge ${r.channel}`}>{CHANNEL_LABELS[r.channel]}</span></td>
                   <td>{r.confirmation}</td>
                   <td className="num">{(r.adults ?? 0) + (r.children ?? 0) || "-"}</td>
-                  <td>{r.profiles > 0 ? <span className="ok">입력됨</span> : <span className="muted">미입력</span>}</td>
+                  <td><a href={`/reservations/${r.id}`}>{r.profiles > 0 ? `${r.profiles}명 입력됨` : "입력하기"}</a></td>
                 </tr>
               ))}
             </tbody>

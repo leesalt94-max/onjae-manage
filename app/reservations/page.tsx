@@ -1,7 +1,8 @@
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { currentMonth, money, monthRange } from "@/lib/format";
-import { GENDER_LABELS, listReservations, STATUS_LABELS } from "@/lib/reservations";
+import { AGE_LABELS, GENDER_LABELS } from "@/lib/guests";
+import { listReservations, STATUS_LABELS } from "@/lib/reservations";
 import { CHANNEL_LABELS, CHANNELS, type Channel } from "@/lib/types";
 import type { SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
@@ -53,9 +54,11 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
                   <td className="num">{money(r.commission, r.currency)}</td>
                   <td className="num">{money(r.payout_amount, r.currency)}</td>
                   <td>
-                    {r.genders
-                      ? r.genders.split(",").map((g, i) => `${GENDER_LABELS[g] ?? g} ${r.ages?.split(",")[i] ?? "?"}`).join(", ")
-                      : <span className="muted">미입력</span>}
+                    <a href={`/reservations/${r.id}`}>
+                      {r.genders
+                        ? r.genders.split(",").map((g, i) => `${GENDER_LABELS[g] ?? g}·${AGE_LABELS[r.ages?.split(",")[i] ?? "unknown"]}`).join(", ")
+                        : "입력"}
+                    </a>
                   </td>
                 </tr>
               ))}

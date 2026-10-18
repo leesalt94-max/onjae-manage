@@ -14,7 +14,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   const params = await searchParams;
   const sql = db();
   const [creds, kakao] = await Promise.all([listCredentialStatus(sql), isKakaoConnected(sql)]);
-  const appUrl = process.env.APP_URL ?? "";
 
   return (
     <OwnerShell>
@@ -70,13 +69,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
         )}
       </div>
 
-      <h2>게스트 체크인 폼</h2>
-      <div className="panel">
-        <p>
-          아래 주소를 각 플랫폼의 자동 메시지(체크인 안내)에 한 번만 넣어두면, 게스트가 직접 성별·나이를 입력합니다.
-        </p>
-        <code>{appUrl}/checkin</code>
-      </div>
     </OwnerShell>
   );
 }

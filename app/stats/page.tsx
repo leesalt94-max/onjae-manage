@@ -2,8 +2,8 @@ import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { intEnv } from "@/lib/env";
 import { money, pct } from "@/lib/format";
-import { GENDER_LABELS } from "@/lib/reservations";
-import { ageBands, genderBreakdown, monthlyByChannel, occupancy, summary } from "@/lib/stats";
+import { AGE_LABELS, GENDER_LABELS } from "@/lib/guests";
+import { ageBands, genderBreakdown, guestCoverage, monthlyByChannel, occupancy, summary } from "@/lib/stats";
 import { CHANNEL_LABELS } from "@/lib/types";
 import { OwnerShell } from "../nav";
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 function Bars({ rows }: { rows: { label: string; count: number }[] }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   const total = rows.reduce((a, r) => a + r.count, 0);
-  if (total === 0) return <p className="muted">아직 입력된 게스트 정보가 없습니다.</p>;
+  if (total === 0) return <p className="muted">아직 입력된 투숙객 정보가 없습니다.</p>;
   return (
     <table>
       <tbody>
@@ -33,12 +33,13 @@ export default async function StatsPage() {
   const sql = db();
   const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
   const yearAhead = new Date(Date.now() + 86_400_000 * 366).toISOString().slice(0, 10);
-  const [monthly, occ, sum, genders, ages] = await Promise.all([
+  const [monthly, occ, sum, genders, ages, coverage] = await Promise.all([
     monthlyByChannel(sql, 12),
     occupancy(sql, intEnv("ROOM_COUNT", 1), 12),
     summary(sql, yearAgo, yearAhead),
     genderBreakdown(sql, yearAgo, yearAhead),
     ageBands(sql, yearAgo, yearAhead),
+    guestCoverage(sql, yearAgo, yearAhead),
   ]);
 
   // 채널별 실수익률 = 정산액 / 게스트 결제액
@@ -107,6 +108,10 @@ export default async function StatsPage() {
         </table>
       </div>
 
+      <h2>투숙객 성별·나이대</h2>
+      <p className="muted">
+        성별·나이를 입력한 예약 {coverage.entered}건 / 전체 {coverage.total}건 ({pct(coverage.entered, coverage.total)}) 기준입니다.
+      </p>
       <div className="grid">
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>성별</h2>
@@ -114,7 +119,7 @@ export default async function StatsPage() {
         </div>
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>나이대</h2>
-          <Bars rows={ages.map((a) => ({ label: a.band, count: a.count }))} />
+          <Bars rows={ages.map((a) => ({ label: AGE_LABELS[a.band] ?? a.band, count: a.count }))} />
         </div>
       </div>
     </OwnerShell>

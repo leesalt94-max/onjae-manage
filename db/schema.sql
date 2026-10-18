@@ -30,13 +30,13 @@ CREATE TABLE IF NOT EXISTS reservations (
 );
 CREATE INDEX IF NOT EXISTS reservations_check_in_idx ON reservations (check_in);
 
--- 게스트가 체크인 폼에 직접 입력한 인원별 성별·나이. 이름 등 식별정보는 두지 않는다.
+-- 사장님이 예약마다 입력하는 투숙객별 성별·나이. 이름 등 식별정보는 두지 않는다.
 CREATE TABLE IF NOT EXISTS guest_profiles (
   id             BIGSERIAL PRIMARY KEY,
   reservation_id BIGINT NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
-  gender         TEXT NOT NULL CHECK (gender IN ('male', 'female', 'other', 'undisclosed')),
-  age            INTEGER CHECK (age BETWEEN 0 AND 120),
-  consented_at   TIMESTAMPTZ NOT NULL,
+  gender         TEXT NOT NULL DEFAULT 'unknown' CHECK (gender IN ('male', 'female', 'unknown')),
+  age_band       TEXT NOT NULL DEFAULT 'unknown'
+                 CHECK (age_band IN ('child', '10s', '20s', '30s', '40s', '50s', '60plus', 'unknown')),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS guest_profiles_reservation_idx ON guest_profiles (reservation_id);

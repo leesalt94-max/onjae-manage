@@ -7,6 +7,7 @@ import { deleteCredentials, saveCredentials, setEnabled } from "@/lib/credential
 import { db } from "@/lib/db";
 import { finishSyncRun, startSyncRun, upsertReservations } from "@/lib/ingest";
 import { sendKakao } from "@/lib/kakao";
+import { guestsFromForm, MAX_GUESTS, saveGuestProfiles } from "@/lib/guests";
 import { answerOtp } from "@/lib/otp";
 import { parseExport } from "@/lib/parsers";
 import { CHANNELS } from "@/lib/types";
@@ -88,44 +89,16 @@ export async function kakaoTestAction() {
   back("/settings", ok ? "카카오톡으로 테스트 메시지를 보냈습니다." : "전송하지 못했습니다. 카카오 연결을 확인해 주세요.", ok ? "ok" : "error");
 }
 
-const checkinSchema = z.object({
-  confirmation: z.string().trim().min(4).max(40),
-  checkIn: z.iso.date(),
-  lang: z.enum(["ko", "en", "zh"]).default("en"),
-  consent: z.literal("yes"),
-  genders: z.array(z.enum(["male", "female", "other", "undisclosed"])).min(1).max(16),
-  ages: z.array(z.string()).min(1).max(16),
-});
-
-// 게스트용 공개 폼. 예약번호와 체크인 날짜가 맞아야만 저장된다.
-export async function checkinAction(formData: FormData) {
-  const parsed = checkinSchema.safeParse({
-    confirmation: formData.get("confirmation"),
-    checkIn: formData.get("checkIn"),
-    lang: formData.get("lang") ?? undefined,
-    consent: formData.get("consent"),
-    genders: formData.getAll("gender"),
-    ages: formData.getAll("age"),
-  });
-  const lang = String(formData.get("lang") ?? "en");
-  if (!parsed.success || parsed.data.genders.length !== parsed.data.ages.length) {
-    redirect(`/checkin?lang=${lang}&status=invalid`);
-  }
-  const { confirmation, checkIn, genders, ages } = parsed.data;
-  const sql = db();
-  const [reservation] = await sql<{ id: number }[]>`
-    SELECT id FROM reservations
-    WHERE upper(confirmation) = upper(${confirmation}) AND check_in = ${checkIn} AND status <> 'cancelled'`;
-  if (!reservation) redirect(`/checkin?lang=${lang}&status=notfound`);
-
-  await sql.begin(async (tx) => {
-    await tx`DELETE FROM guest_profiles WHERE reservation_id = ${reservation.id}`;
-    for (let i = 0; i < genders.length; i++) {
-      const age = Number.parseInt(ages[i] ?? "", 10);
-      await tx`
-        INSERT INTO guest_profiles (reservation_id, gender, age, consented_at)
-        VALUES (${reservation.id}, ${genders[i]}, ${Number.isFinite(age) && age >= 0 && age <= 120 ? age : null}, now())`;
-    }
-  });
-  redirect(`/checkin?lang=${lang}&status=done`);
+// 사장님이 예약마다 투숙객 성별·나이대를 입력한다. 둘 다 비운 줄은 저장하지 않는다.
+export async function saveGuestsAction(formData: FormData) {
+  await requireOwner();
+  const reservationId = Number(formData.get("reservationId"));
+  if (!Number.isInteger(reservationId) || reservationId <= 0) back("/reservations", "예약을 찾지 못했습니다.", "error");
+  const guests = guestsFromForm(
+    formData.getAll("gender").map(String).slice(0, MAX_GUESTS),
+    formData.getAll("ageBand").map(String).slice(0, MAX_GUESTS),
+  );
+  const saved = await saveGuestProfiles(db(), reservationId, guests);
+  if (!saved) back("/reservations", "예약을 찾지 못했습니다.", "error");
+  back(`/reservations/${reservationId}`, guests.length ? `저장했습니다 (${guests.length}명).` : "입력을 비웠습니다.");
 }
