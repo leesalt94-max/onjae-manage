@@ -116,6 +116,10 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
           );
         })}
       </div>
+      <div className="panel row" style={{ justifyContent: "space-between", marginTop: 24 }}>
+        <span><strong>청소 매니저</strong> <span className="muted small">청소 일정 달력</span></span>
+        <a className="button-link" href="https://onjae-calendar.vercel.app/" target="_blank" rel="noopener noreferrer">열기 ↗</a>
+      </div>
     </OwnerShell>
   );
 }
