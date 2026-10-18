@@ -121,10 +121,22 @@ export async function ageBands(sql: postgres.Sql, from: string, to: string) {
     ORDER BY array_position(ARRAY['child', '10s', '20s', '30s', '40s', '50s', '60plus', 'unknown'], g.age_band)`;
 }
 
+// 손님 나라(예약 단위). 입력한 예약만 센다.
+export async function regionBreakdown(sql: postgres.Sql, from: string, to: string) {
+  return sql<{ region: string; count: number; nights: number; payout: number }[]>`
+    SELECT guest_region AS region, count(*)::int AS count, sum(nights)::int AS nights,
+           coalesce(sum(payout_amount) FILTER (WHERE currency = 'KRW'), 0)::float AS payout
+    FROM reservations
+    WHERE guest_region IS NOT NULL AND status IN ('confirmed', 'completed') AND check_in >= ${from} AND check_in < ${to}
+    GROUP BY 1
+    ORDER BY array_position(ARRAY['japan', 'china', 'asia', 'europe', 'usa', 'other'], guest_region)`;
+}
+
 // 성별·나이를 입력한 예약이 전체 중 얼마나 되는지 (입력 못 한 예약이 있으니 통계 해석용).
 export async function guestCoverage(sql: postgres.Sql, from: string, to: string) {
-  const [row] = await sql<{ entered: number; total: number }[]>`
+  const [row] = await sql<{ entered: number; regionEntered: number; total: number }[]>`
     SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM guest_profiles g WHERE g.reservation_id = r.id))::int AS entered,
+           count(*) FILTER (WHERE r.guest_region IS NOT NULL)::int AS "regionEntered",
            count(*)::int AS total
     FROM reservations r
     WHERE r.status IN ('confirmed', 'completed') AND r.check_in >= ${from} AND r.check_in < ${to}`;
@@ -132,10 +144,10 @@ export async function guestCoverage(sql: postgres.Sql, from: string, to: string)
 }
 
 export async function upcoming(sql: postgres.Sql, days = 7) {
-  return sql<{ id: number; channel: Channel; confirmation: string; check_in: string; check_out: string; adults: number | null; children: number | null; profiles: number }[]>`
+  return sql<{ id: number; channel: Channel; confirmation: string; check_in: string; check_out: string; adults: number | null; children: number | null; profiles: number; guest_region: string | null }[]>`
     SELECT r.id, r.channel, r.confirmation, to_char(r.check_in, 'YYYY-MM-DD') AS check_in,
            to_char(r.check_out, 'YYYY-MM-DD') AS check_out, r.adults, r.children,
-           (SELECT count(*)::int FROM guest_profiles g WHERE g.reservation_id = r.id) AS profiles
+           (SELECT count(*)::int FROM guest_profiles g WHERE g.reservation_id = r.id) AS profiles, r.guest_region
     FROM reservations r
     WHERE r.status = 'confirmed' AND r.check_in BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days}::int
     ORDER BY r.check_in`;

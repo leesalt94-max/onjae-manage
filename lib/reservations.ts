@@ -14,6 +14,7 @@ export interface ReservationRow {
   children: number | null;
   infants: number | null;
   currency: string;
+  guest_region: string | null;
   guest_paid: string | null;
   commission: string | null;
   payout_amount: string | null;
@@ -35,7 +36,7 @@ export async function listReservations(sql: postgres.Sql, filter: { channel?: Ch
   return sql<ReservationRow[]>`
     SELECT r.id, r.channel, r.confirmation, r.status, r.listing,
            to_char(r.check_in, 'YYYY-MM-DD') AS check_in, to_char(r.check_out, 'YYYY-MM-DD') AS check_out,
-           r.nights, r.adults, r.children, r.infants, r.currency, r.guest_paid, r.commission, r.payout_amount,
+           r.nights, r.adults, r.children, r.infants, r.currency, r.guest_region, r.guest_paid, r.commission, r.payout_amount,
            to_char(r.booked_at, 'YYYY-MM-DD') AS booked_at,
            string_agg(g.gender, ',' ORDER BY g.id) FILTER (WHERE g.id IS NOT NULL) AS genders,
            string_agg(g.age_band, ',' ORDER BY g.id) FILTER (WHERE g.id IS NOT NULL) AS ages

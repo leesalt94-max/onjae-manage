@@ -2,6 +2,7 @@ import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { currentMonth, money, monthRange } from "@/lib/format";
 import { pendingOtps } from "@/lib/otp";
+import { REGION_LABELS } from "@/lib/guests";
 import { lastSyncs, monthlyByChannel, upcoming } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
 import { OwnerShell } from "./nav";
@@ -48,7 +49,7 @@ export default async function Home() {
       <div className="panel table-wrap">
         {next.length === 0 ? <p className="muted">없음</p> : (
           <table>
-            <thead><tr><th>체크인</th><th>체크아웃</th><th>채널</th><th>예약번호</th><th className="num">인원</th><th>성별·나이</th></tr></thead>
+            <thead><tr><th>체크인</th><th>체크아웃</th><th>채널</th><th>예약번호</th><th className="num">인원</th><th>나라·성별·나이</th></tr></thead>
             <tbody>
               {next.map((r) => (
                 <tr key={r.id}>
@@ -56,7 +57,9 @@ export default async function Home() {
                   <td><span className={`badge ${r.channel}`}>{CHANNEL_LABELS[r.channel]}</span></td>
                   <td>{r.confirmation}</td>
                   <td className="num">{(r.adults ?? 0) + (r.children ?? 0) || "-"}</td>
-                  <td><a href={`/reservations/${r.id}`}>{r.profiles > 0 ? `${r.profiles}명 입력됨` : "입력하기"}</a></td>
+                  <td><a href={`/reservations/${r.id}`}>{r.profiles > 0 || r.guest_region
+                    ? [r.guest_region ? REGION_LABELS[r.guest_region] : "", r.profiles > 0 ? `${r.profiles}명 입력됨` : ""].filter(Boolean).join(" · ")
+                    : "입력하기"}</a></td>
                 </tr>
               ))}
             </tbody>

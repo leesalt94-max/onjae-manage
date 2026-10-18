@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS reservations (
   UNIQUE (channel, confirmation)
 );
 CREATE INDEX IF NOT EXISTS reservations_check_in_idx ON reservations (check_in);
+-- 사장님이 예약마다 고르는 손님 출신 지역 (나라 이름 수준의 큰 구분만, 2026-10-18 사장님 요청).
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS guest_region TEXT
+  CHECK (guest_region IN ('japan', 'china', 'asia', 'europe', 'usa', 'other')); -- china = 중국·대만
 
 -- 사장님이 예약마다 입력하는 투숙객별 성별·나이. 이름 등 식별정보는 두지 않는다.
 CREATE TABLE IF NOT EXISTS guest_profiles (

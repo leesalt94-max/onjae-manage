@@ -1,7 +1,7 @@
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { currentMonth, money, monthRange } from "@/lib/format";
-import { AGE_LABELS, GENDER_LABELS } from "@/lib/guests";
+import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
 import { countCancelled, listReservations, STATUS_LABELS } from "@/lib/reservations";
 import { CHANNEL_LABELS, CHANNELS, type Channel } from "@/lib/types";
 import type { SearchParams } from "../flash";
@@ -24,10 +24,13 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
   };
   const payoutSum = rows.reduce((a, r) => a + (r.currency === "KRW" ? Number(r.payout_amount ?? 0) : 0), 0);
   const nightsSum = rows.reduce((a, r) => a + (r.nights ?? 0), 0);
-  const guestText = (r: (typeof rows)[number]) =>
-    r.genders
+  const guestText = (r: (typeof rows)[number]) => {
+    const people = r.genders
       ? r.genders.split(",").map((g, i) => `${GENDER_LABELS[g] ?? g}·${AGE_LABELS[r.ages?.split(",")[i] ?? "unknown"]}`).join(", ")
-      : "입력";
+      : "";
+    const text = [r.guest_region ? REGION_LABELS[r.guest_region] : "", people].filter(Boolean).join(" · ");
+    return text || "입력";
+  };
 
   return (
     <OwnerShell>
@@ -82,7 +85,7 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
             <thead>
               <tr>
                 <th>체크인</th><th>박</th><th>채널</th><th>예약번호</th><th>상태</th><th className="num">성인/아동/유아</th>
-                <th className="num">결제액</th><th className="num">수수료</th><th className="num">정산액</th><th>성별·나이</th>
+                <th className="num">결제액</th><th className="num">수수료</th><th className="num">정산액</th><th>나라·성별·나이</th>
               </tr>
             </thead>
             <tbody>

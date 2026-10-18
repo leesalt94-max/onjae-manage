@@ -74,7 +74,7 @@ HMABC123,Canceled by guest,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"�
     expect(s.avgPartySize).toBe(2.5);
     expect(await genderBreakdown(sql, "2000-01-01", "2100-01-01")).toHaveLength(2);
     expect((await ageBands(sql, "2000-01-01", "2100-01-01")).map((a) => a.band)).toEqual(["child", "30s"]);
-    expect(await guestCoverage(sql, "2000-01-01", "2100-01-01")).toEqual({ entered: 1, total: 1 });
+    expect(await guestCoverage(sql, "2000-01-01", "2100-01-01")).toEqual({ entered: 1, regionEntered: 0, total: 1 });
     await upcoming(sql, 7);
     await lastSyncs(sql);
   });
@@ -106,13 +106,17 @@ TRIPRATE1,확인함,${day(1)},${day(3)},2,KRW,85000.00,`);
   it("사장님이 입력한 투숙객 정보는 예약마다 통째로 바뀌고, 비우면 미입력이 된다", async () => {
     const { saveGuestProfiles, getReservationGuests } = await import("../lib/guests");
     const [{ id }] = await sql<{ id: number }[]>`SELECT id FROM reservations WHERE confirmation = 'B1'`;
-    expect(await saveGuestProfiles(sql, id, [{ gender: "male", ageBand: "40s" }, { gender: "unknown", ageBand: "child" }])).toBe(true);
+    expect(await saveGuestProfiles(sql, id, [{ gender: "male", ageBand: "40s" }, { gender: "unknown", ageBand: "child" }], "japan")).toBe(true);
+    expect((await getReservationGuests(sql, id))?.reservation.guest_region).toBe("japan");
+    const { regionBreakdown } = await import("../lib/stats");
+    expect(await regionBreakdown(sql, "2000-01-01", "2100-01-01")).toEqual([expect.objectContaining({ region: "japan", count: 1 })]);
     expect((await getReservationGuests(sql, id))?.guests).toEqual([
       { gender: "male", age_band: "40s" },
       { gender: "unknown", age_band: "child" },
     ]);
     expect(await saveGuestProfiles(sql, id, [])).toBe(true);
     expect((await getReservationGuests(sql, id))?.guests).toEqual([]);
+    expect((await getReservationGuests(sql, id))?.reservation.guest_region).toBeNull();
     expect(await saveGuestProfiles(sql, 999999, [])).toBe(false);
   });
 

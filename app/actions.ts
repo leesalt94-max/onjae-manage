@@ -7,7 +7,7 @@ import { deleteCredentials, saveCredentials, setEnabled } from "@/lib/credential
 import { db } from "@/lib/db";
 import { importFiles } from "@/lib/import-files";
 import { sendKakao } from "@/lib/kakao";
-import { guestsFromForm, MAX_GUESTS, saveGuestProfiles } from "@/lib/guests";
+import { guestsFromForm, MAX_GUESTS, REGION_LABELS, regionFromForm, saveGuestProfiles } from "@/lib/guests";
 import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
@@ -119,9 +119,10 @@ export async function saveGuestsAction(formData: FormData) {
     formData.getAll("gender").map(String).slice(0, MAX_GUESTS),
     formData.getAll("ageBand").map(String).slice(0, MAX_GUESTS),
   );
-  const saved = await saveGuestProfiles(db(), reservationId, guests);
+  const region = regionFromForm(String(formData.get("region") ?? ""));
+  const saved = await saveGuestProfiles(db(), reservationId, guests, region);
   if (!saved) back("/reservations", "예약을 찾지 못했습니다.", "error");
-  back(`/reservations/${reservationId}`, guests.length ? `저장했습니다 (${guests.length}명).` : "입력을 비웠습니다.");
+  back(`/reservations/${reservationId}`, guests.length || region ? `저장했습니다 (${guests.length}명${region ? `, ${REGION_LABELS[region]}` : ""}).` : "입력을 비웠습니다.");
 }
 
 // 사장님 컴퓨터 수집 프로그램용 연결 코드. 화면에 한 번만 보여 준다.

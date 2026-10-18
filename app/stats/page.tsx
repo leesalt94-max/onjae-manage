@@ -1,9 +1,9 @@
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { money, pct } from "@/lib/format";
-import { AGE_LABELS, GENDER_LABELS } from "@/lib/guests";
+import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
 import { buildInsights, stayRows } from "@/lib/insights";
-import { ageBands, genderBreakdown, getRoomCount, guestCoverage, monthlyByChannel, summary } from "@/lib/stats";
+import { ageBands, genderBreakdown, getRoomCount, guestCoverage, monthlyByChannel, regionBreakdown, summary } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS, type Channel } from "@/lib/types";
 import { OwnerShell } from "../nav";
 import { Columns, HBars, Legend, ShareBar, type SeriesDef } from "./charts";
@@ -26,14 +26,16 @@ export default async function StatsPage() {
   const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
   const yearAhead = new Date(Date.now() + 86_400_000 * 366).toISOString().slice(0, 10);
   const roomCount = await getRoomCount(sql);
-  const [rows, monthly, sum, genders, ages, coverage] = await Promise.all([
+  const [rows, monthly, sum, genders, ages, coverage, regions] = await Promise.all([
     stayRows(sql, yearAgo, yearAhead),
     monthlyByChannel(sql, MONTHS_BACK),
     summary(sql, yearAgo, today),
     genderBreakdown(sql, yearAgo, yearAhead),
     ageBands(sql, yearAgo, yearAhead),
     guestCoverage(sql, yearAgo, yearAhead),
+    regionBreakdown(sql, yearAgo, yearAhead),
   ]);
+  const regionTotal = regions.reduce((a, r) => a + r.count, 0);
   const ins = buildInsights(rows, { today, roomCount, monthsBack: MONTHS_BACK, monthsAhead: MONTHS_AHEAD });
 
   // 채널별 수수료: 체크인이 오늘 이전인 원화 예약만.
@@ -149,6 +151,21 @@ export default async function StatsPage() {
             <p className="muted small">트립닷컴 파일에는 인원이 없어 빠져 있어요.</p>
           </div>
         </div>
+      </div>
+
+      <h2>손님 나라</h2>
+      <p className="muted">나라를 고른 예약 {coverage.regionEntered}건 / 전체 {coverage.total}건 기준입니다. 예약 화면의 "입력"에서 고를 수 있어요.</p>
+      <div className="panel">
+        {regionTotal === 0 ? <p className="muted">아직 입력된 정보가 없습니다.</p> : (
+          <HBars
+            rows={regions.map((r) => ({
+              label: REGION_LABELS[r.region] ?? r.region,
+              value: r.count,
+              note: `${share(r.count, regionTotal)} · 평균 ${r.count ? (r.nights / r.count).toFixed(1) : "-"}박${r.nights ? ` · 박당 ${short(r.payout / r.nights)}` : ""}`,
+            }))}
+            format={(n) => `${n}건`}
+          />
+        )}
       </div>
 
       <h2>투숙객 성별·나이대</h2>

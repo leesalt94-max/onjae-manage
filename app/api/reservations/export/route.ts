@@ -2,7 +2,7 @@ import Papa from "papaparse";
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { currentMonth, monthRange } from "@/lib/format";
-import { AGE_LABELS, GENDER_LABELS } from "@/lib/guests";
+import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
 import { listReservations, STATUS_LABELS } from "@/lib/reservations";
 import { CHANNEL_LABELS, CHANNELS, type Channel } from "@/lib/types";
 
@@ -32,6 +32,7 @@ export async function GET(req: Request) {
       게스트결제액: r.guest_paid ?? "",
       수수료: r.commission ?? "",
       정산액: r.payout_amount ?? "",
+      나라: r.guest_region ? REGION_LABELS[r.guest_region] : "",
       성별: r.genders?.split(",").map((g) => GENDER_LABELS[g] ?? g).join(" ") ?? "",
       나이대: r.ages?.split(",").map((a) => AGE_LABELS[a] ?? a).join(" ") ?? "",
     })),

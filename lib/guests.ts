@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-// 사장님 결정(2026-10-18): 성별과 나이대만, 사장님이 예약마다 직접 입력. 모르면 "모름" 또는 비워둔다.
+// 사장님 결정(2026-10-18): 성별·나이대(투숙객별)와 출신 지역(예약별)만, 사장님이 직접 입력. 모르면 비워둔다.
 export const GENDERS = ["male", "female", "unknown"] as const;
 export type Gender = (typeof GENDERS)[number];
 export const GENDER_LABELS: Record<string, string> = { male: "남", female: "여", unknown: "모름" };
@@ -17,6 +17,16 @@ export const AGE_LABELS: Record<string, string> = {
   "60plus": "60대 이상",
   unknown: "모름",
 };
+
+// 중국·대만은 하나로 (사장님 결정 2026-10-18).
+export const REGIONS = ["japan", "china", "asia", "europe", "usa", "other"] as const;
+export type Region = (typeof REGIONS)[number];
+export const REGION_LABELS: Record<string, string> = {
+  japan: "일본", china: "중국·대만", asia: "아시아(기타)", europe: "유럽", usa: "미국", other: "기타",
+};
+export function regionFromForm(value: string): Region | null {
+  return (REGIONS as readonly string[]).includes(value) ? (value as Region) : null;
+}
 
 export const MAX_GUESTS = 16;
 
@@ -42,10 +52,13 @@ export function guestsFromForm(genders: string[], ageBands: string[]): GuestInpu
 }
 
 // 예약의 투숙객 목록을 통째로 바꾼다. 빈 목록이면 입력을 지운다. 예약이 없으면 false.
-export async function saveGuestProfiles(sql: postgres.Sql, reservationId: number, guests: GuestInput[]): Promise<boolean> {
+export async function saveGuestProfiles(
+  sql: postgres.Sql, reservationId: number, guests: GuestInput[], region: Region | null = null,
+): Promise<boolean> {
   return sql.begin(async (tx) => {
     const [exists] = await tx`SELECT id FROM reservations WHERE id = ${reservationId} FOR UPDATE`;
     if (!exists) return false;
+    await tx`UPDATE reservations SET guest_region = ${region} WHERE id = ${reservationId}`;
     await tx`DELETE FROM guest_profiles WHERE reservation_id = ${reservationId}`;
     for (const g of guests) {
       await tx`INSERT INTO guest_profiles (reservation_id, gender, age_band) VALUES (${reservationId}, ${g.gender}, ${g.ageBand})`;
@@ -58,9 +71,10 @@ export async function getReservationGuests(sql: postgres.Sql, reservationId: num
   const [reservation] = await sql<{
     id: number; channel: "airbnb" | "booking" | "trip"; confirmation: string; status: string; listing: string | null;
     check_in: string; check_out: string; nights: number; adults: number | null; children: number | null; infants: number | null;
+    guest_region: Region | null;
   }[]>`
     SELECT id, channel, confirmation, status, listing, to_char(check_in, 'YYYY-MM-DD') AS check_in,
-           to_char(check_out, 'YYYY-MM-DD') AS check_out, nights, adults, children, infants
+           to_char(check_out, 'YYYY-MM-DD') AS check_out, nights, adults, children, infants, guest_region
     FROM reservations WHERE id = ${reservationId}`;
   if (!reservation) return null;
   const guests = await sql<{ gender: Gender; age_band: AgeBand }[]>`
