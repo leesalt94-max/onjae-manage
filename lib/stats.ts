@@ -125,7 +125,7 @@ export async function genderBreakdown(sql: postgres.Sql, from: string, to: strin
   return sql<{ gender: string; count: number }[]>`
     SELECT g.gender, count(*)::int AS count
     FROM guest_profiles g JOIN reservations r ON r.id = g.reservation_id
-    WHERE r.check_in >= ${from} AND r.check_in < ${to}
+    WHERE r.status IN ('confirmed', 'completed') AND r.check_in >= ${from} AND r.check_in < ${to}
     GROUP BY 1 ORDER BY 2 DESC`;
 }
 
@@ -133,7 +133,7 @@ export async function ageBands(sql: postgres.Sql, from: string, to: string) {
   return sql<{ band: string; count: number }[]>`
     SELECT g.age_band AS band, count(*)::int AS count
     FROM guest_profiles g JOIN reservations r ON r.id = g.reservation_id
-    WHERE r.check_in >= ${from} AND r.check_in < ${to}
+    WHERE r.status IN ('confirmed', 'completed') AND r.check_in >= ${from} AND r.check_in < ${to}
     GROUP BY 1
     ORDER BY array_position(ARRAY['child', '10s', '20s', '30s', '40s', '50s', '60plus', 'unknown'], g.age_band)`;
 }
