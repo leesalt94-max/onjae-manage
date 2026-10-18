@@ -13,9 +13,9 @@ async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
   const password = await firstVisible(page, [page.locator('input[type="password"]')], 5_000);
   if (!password) return; // 세션이 살아 있음
   if (!ctx.login) {
+    // 로그인 화면을 벗어나 비밀번호 칸이 사라지면 끝난 것으로 본다 (메뉴 이름은 언어마다 달라서 보지 않는다).
     await waitForOwnerLogin(ctx, "트립닷컴", async () =>
-      !(await page.locator('input[type="password"]').first().isVisible())
-      && !!(await firstVisible(page, byText(page, /^(reservations|orders|예약|주문)$/i), 1_000)));
+      !/login|signin|passport/i.test(page.url()) && !(await page.locator('input[type="password"]').first().isVisible()));
     return;
   }
   const login = requireLogin(ctx);

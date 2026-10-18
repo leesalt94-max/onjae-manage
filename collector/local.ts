@@ -64,7 +64,8 @@ async function loadConfig(): Promise<Config> {
 // 이 컴퓨터에 깔린 크롬을 먼저 쓰고, 없으면 윈도우 기본 엣지를 쓴다. 로그인 상태는 전용 프로필에 남는다.
 async function openBrowser(): Promise<BrowserContext> {
   const profile = path.join(HOME, "browser-profile");
-  const options = { headless: false, acceptDownloads: true, viewport: null, locale: "ko-KR", timezoneId: "Asia/Seoul" };
+  // 화면 문구를 서버에서 확인한 영어 화면에 맞추려고 영어로 연다.
+  const options = { headless: false, acceptDownloads: true, viewport: null, locale: "en-US", timezoneId: "Asia/Seoul" };
   for (const channel of ["chrome", "msedge"]) {
     try {
       return await chromium.launchPersistentContext(profile, { ...options, channel });
