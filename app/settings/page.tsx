@@ -3,9 +3,10 @@ import { listCredentialStatus } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { isKakaoConnected } from "@/lib/kakao";
 import { hasPcToken } from "@/lib/pc-token";
+import { getOpenedOn } from "@/lib/insights";
 import { getRoomCount, getTripCleaningFee, getTripCommissionPct } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
-import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveRoomCountAction, saveTripCommissionAction, toggleCredentialAction } from "../actions";
+import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveOpenedOnAction, saveRoomCountAction, saveTripCommissionAction, toggleCredentialAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { PcTokenForm } from "./pc-token";
@@ -16,9 +17,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   await requireOwner();
   const params = await searchParams;
   const sql = db();
-  const [creds, kakao, pcToken, roomCount, tripPct, tripCleaning] = await Promise.all([
+  const [creds, kakao, pcToken, roomCount, tripPct, tripCleaning, opened] = await Promise.all([
     listCredentialStatus(sql), isKakaoConnected(sql), hasPcToken(sql), getRoomCount(sql), getTripCommissionPct(sql),
-    getTripCleaningFee(sql),
+    getTripCleaningFee(sql), getOpenedOn(sql),
   ]);
 
   return (
@@ -31,6 +32,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
         <p className="muted">동시에 받을 수 있는 객실(유닛) 수입니다. 통계의 가동률을 이 숫자로 나눠 계산합니다.</p>
         <form action={saveRoomCountAction} className="row">
           <input type="number" name="roomCount" min={1} max={50} defaultValue={roomCount} required style={{ width: 100 }} />
+          <button type="submit">저장</button>
+        </form>
+      </div>
+
+      <h2>숙소 오픈일</h2>
+      <div className="panel">
+        <p className="muted">가동률은 이 날부터 계산합니다. 비워 두면 첫 체크인 날짜{opened.date && !opened.fromSetting ? `(${opened.date})` : ""}를 씁니다.</p>
+        <form action={saveOpenedOnAction} className="row">
+          <input type="date" name="openedOn" defaultValue={opened.fromSetting ? opened.date ?? "" : ""} />
           <button type="submit">저장</button>
         </form>
       </div>

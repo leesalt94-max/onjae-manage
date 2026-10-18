@@ -90,6 +90,14 @@ export async function saveRoomCountAction(formData: FormData) {
   back("/settings", `객실 수를 ${n}개로 저장했습니다. 통계 가동률에 바로 반영됩니다.`);
 }
 
+export async function saveOpenedOnAction(formData: FormData) {
+  await requireOwner();
+  const v = String(formData.get("openedOn") ?? "").trim();
+  if (v !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) back("/settings", "날짜 형식이 올바르지 않습니다.", "error");
+  await setSetting(db(), "opened_on", v);
+  back("/settings", v ? `오픈일을 ${v}로 저장했습니다. 가동률을 이날부터 계산합니다.` : "오픈일을 비웠습니다 (첫 체크인 날짜를 씁니다).");
+}
+
 export async function saveTripCommissionAction(formData: FormData) {
   await requireOwner();
   const pctRaw = String(formData.get("tripCommissionPct") ?? "").trim();

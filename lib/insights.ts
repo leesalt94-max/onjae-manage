@@ -14,12 +14,14 @@ export interface StayRow {
   adults: number | null;
   children: number | null;
   payout: number | null;
+  commission: number | null;
 }
 
 export async function stayRows(sql: postgres.Sql, from: string, to: string): Promise<StayRow[]> {
   return sql<StayRow[]>`
     SELECT channel, to_char(check_in, 'YYYY-MM-DD') AS check_in, to_char(check_out, 'YYYY-MM-DD') AS check_out,
-           nights, to_char(booked_at, 'YYYY-MM-DD') AS booked_at, adults, children, payout_amount::float AS payout
+           nights, to_char(booked_at, 'YYYY-MM-DD') AS booked_at, adults, children, payout_amount::float AS payout,
+           commission::float AS commission
     FROM reservations
     WHERE status IN ('confirmed', 'completed') AND currency = 'KRW'
       AND check_out > ${from} AND check_in < ${to}
@@ -31,7 +33,7 @@ export interface MonthPoint {
   future: boolean; // 오늘 이후 달 (이미 들어온 예약만 반영)
   revenue: Record<Channel, number>;
   nights: number;
-  occupancy: number; // 0~1+ (오버부킹이면 1을 넘을 수 있다)
+  occupancy: number | null; // 0~1+ (오버부킹이면 1을 넘을 수 있다). 오픈 전 달은 null
 }
 
 export interface Bucket { label: string; count: number; revenue: number; nights: number }
@@ -39,7 +41,7 @@ export interface Bucket { label: string; count: number; revenue: number; nights:
 export interface Insights {
   months: MonthPoint[];
   past: { revenue: number; nights: number; occupancy: number; adr: number | null; days: number };
-  channels: { channel: Channel; bookings: number; nights: number; revenue: number; adr: number | null }[];
+  channels: { channel: Channel; bookings: number; nights: number; revenue: number; commission: number; adr: number | null }[];
   weekdays: { label: string; nights: number; revenue: number; occupancy: number; adr: number | null }[];
   lead: Bucket[];
   stay: Bucket[];
@@ -69,38 +71,61 @@ function bucketize<T>(labels: string[], pick: (row: T) => number | null, rows: T
   return out;
 }
 
-/** today: 한국 날짜 YYYY-MM-DD. monthsBack: 이번 달 포함 지난 달 수, monthsAhead: 앞으로 볼 달 수. */
-export function buildInsights(rows: StayRow[], opts: { today: string; roomCount: number; monthsBack: number; monthsAhead: number }): Insights {
+export interface InsightOptions {
+  today: string; // 한국 날짜 YYYY-MM-DD
+  from: string; // 분석 시작일 (포함)
+  to: string; // 분석 끝 (포함하지 않음). 오늘보다 뒤면 오늘까지만 "지난 기간"으로 센다
+  openedOn: string | null; // 숙소 오픈일. 이전 날은 가동률 분모에서 뺀다
+  roomCount: number;
+  monthsAhead: number; // 끝이 오늘 이후면 그래프에 앞으로 몇 달을 더 보여줄지
+}
+
+const maxDate = (a: Date, b: Date) => (a > b ? a : b);
+const minDate = (a: Date, b: Date) => (a < b ? a : b);
+
+export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
   const { today, roomCount } = opts;
   const thisMonth = today.slice(0, 7);
-  const firstMonth = addMonths(thisMonth, -(opts.monthsBack - 1));
-  const lastMonth = addMonths(thisMonth, opts.monthsAhead);
+  const todayD = toDate(today);
+  const fromD = toDate(opts.from);
+  const toD = toDate(opts.to);
+  const opened = opts.openedOn ? toDate(opts.openedOn) : null;
+  // "지난 기간": 오픈일·시작일 중 늦은 날부터, 끝·오늘 중 이른 날 전까지.
+  const pastStart = opened ? maxDate(fromD, opened) : fromD;
+  const pastEnd = minDate(toD, todayD);
+  // 오픈 전 달은 그래프에서도 뺀다.
+  const firstMonth = iso(pastStart > fromD && pastStart < toD ? pastStart : fromD).slice(0, 7);
+  const lastMonth = toD >= todayD ? addMonths(thisMonth, opts.monthsAhead) : iso(new Date(toD.getTime() - DAY)).slice(0, 7);
   const start = toDate(`${firstMonth}-01`);
   const end = toDate(`${addMonths(lastMonth, 1)}-01`);
-  const todayD = toDate(today);
 
   const months = new Map<string, MonthPoint>();
   for (let m = firstMonth; m <= lastMonth; m = addMonths(m, 1)) {
-    months.set(m, { month: m, future: m > thisMonth, revenue: { airbnb: 0, booking: 0, trip: 0 }, nights: 0, occupancy: 0 });
+    months.set(m, { month: m, future: m > thisMonth, revenue: { airbnb: 0, booking: 0, trip: 0 }, nights: 0, occupancy: null });
   }
   const weekdays = WEEKDAYS.map((label) => ({ label, nights: 0, revenue: 0, occupancy: 0, adr: null as number | null }));
-  const channels = new Map(CHANNELS.map((c) => [c, { channel: c, bookings: 0, nights: 0, revenue: 0, adr: null as number | null }]));
-  const past = { revenue: 0, nights: 0, occupancy: 0, adr: null as number | null, days: Math.round((todayD.getTime() - start.getTime()) / DAY) };
+  const channels = new Map(CHANNELS.map((c) => [c, { channel: c, bookings: 0, nights: 0, revenue: 0, commission: 0, adr: null as number | null }]));
+  const past = {
+    revenue: 0, nights: 0, occupancy: 0, adr: null as number | null,
+    days: Math.max(0, Math.round((pastEnd.getTime() - pastStart.getTime()) / DAY)),
+  };
   const pastStays: StayRow[] = [];
 
   for (const r of rows) {
     const nights = Math.max(1, Math.round((toDate(r.check_out).getTime() - toDate(r.check_in).getTime()) / DAY));
     const perNight = (r.payout ?? 0) / nights;
+    const feePerNight = (r.commission ?? 0) / nights;
     let countedPast = false;
     for (let i = 0; i < nights; i++) {
       const d = new Date(toDate(r.check_in).getTime() + i * DAY);
-      if (d < start || d >= end) continue;
-      const mp = months.get(iso(d).slice(0, 7));
-      if (mp) {
-        mp.revenue[r.channel] += perNight;
-        mp.nights++;
+      if (d >= start && d < end) {
+        const mp = months.get(iso(d).slice(0, 7));
+        if (mp) {
+          mp.revenue[r.channel] += perNight;
+          mp.nights++;
+        }
       }
-      if (d < todayD) {
+      if (d >= pastStart && d < pastEnd) {
         countedPast = true;
         past.revenue += perNight;
         past.nights++;
@@ -110,6 +135,7 @@ export function buildInsights(rows: StayRow[], opts: { today: string; roomCount:
         const ch = channels.get(r.channel)!;
         ch.nights++;
         ch.revenue += perNight;
+        ch.commission += feePerNight;
       }
     }
     if (countedPast) {
@@ -118,16 +144,19 @@ export function buildInsights(rows: StayRow[], opts: { today: string; roomCount:
     }
   }
 
+  // 월 가동률: 그 달 중 오픈일 이후 날만 분모로. 오픈 전 달은 비워 둔다.
   for (const mp of months.values()) {
-    const [y, m] = mp.month.split("-").map(Number);
-    const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    mp.occupancy = mp.nights / (days * roomCount);
+    const monthStart = toDate(`${mp.month}-01`);
+    const monthEnd = toDate(`${addMonths(mp.month, 1)}-01`);
+    const from = opened ? maxDate(monthStart, opened) : monthStart;
+    const days = Math.round((monthEnd.getTime() - from.getTime()) / DAY);
+    mp.occupancy = days > 0 ? mp.nights / (days * roomCount) : null;
   }
   past.occupancy = past.days > 0 ? past.nights / (past.days * roomCount) : 0;
   past.adr = past.nights > 0 ? past.revenue / past.nights : null;
   // 요일별 가동률: 그 요일이 기간 안에 몇 번 있었는지로 나눈다.
   const dowCount = Array(7).fill(0);
-  for (let t = start.getTime(); t < todayD.getTime(); t += DAY) dowCount[new Date(t).getUTCDay()]++;
+  for (let t = pastStart.getTime(); t < pastEnd.getTime(); t += DAY) dowCount[new Date(t).getUTCDay()]++;
   weekdays.forEach((w, i) => {
     w.occupancy = dowCount[i] > 0 ? w.nights / (dowCount[i] * roomCount) : 0;
     w.adr = w.nights > 0 ? w.revenue / w.nights : null;
@@ -187,7 +216,16 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
   }
   const ahead = months.filter((m) => m.future);
   if (ahead.length) {
-    notes.push(`앞으로: ${ahead.map((m) => `${Number(m.month.slice(5))}월 ${Math.round(m.occupancy * 100)}%`).join(", ")} 예약이 차 있어요.`);
+    notes.push(`앞으로: ${ahead.map((m) => `${Number(m.month.slice(5))}월 ${Math.round((m.occupancy ?? 0) * 100)}%`).join(", ")} 예약이 차 있어요.`);
   }
   return notes;
+}
+
+// 숙소 오픈일: 설정값이 없으면 첫 체크인 날짜로 본다.
+export async function getOpenedOn(sql: postgres.Sql): Promise<{ date: string | null; fromSetting: boolean }> {
+  const [row] = await sql<{ setting: string | null; first: string | null }[]>`
+    SELECT (SELECT value FROM settings WHERE key = 'opened_on') AS setting,
+           (SELECT to_char(min(check_in), 'YYYY-MM-DD') FROM reservations WHERE status IN ('confirmed', 'completed')) AS first`;
+  if (row.setting && /^\d{4}-\d{2}-\d{2}$/.test(row.setting)) return { date: row.setting, fromSetting: true };
+  return { date: row.first, fromSetting: false };
 }

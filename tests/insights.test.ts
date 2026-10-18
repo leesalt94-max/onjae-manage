@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildInsights, type StayRow } from "../lib/insights";
 
 const row = (channel: StayRow["channel"], checkIn: string, checkOut: string, payout: number, extra: Partial<StayRow> = {}): StayRow => ({
+  commission: null,
   channel, check_in: checkIn, check_out: checkOut, nights: Math.round((Date.parse(checkOut) - Date.parse(checkIn)) / 86_400_000),
   booked_at: null, adults: null, children: null, payout, ...extra,
 });
@@ -13,7 +14,7 @@ describe("통계 인사이트", () => {
       row("booking", "2026-09-29", "2026-10-02", 300_000, { booked_at: "2026-09-27", adults: 2, children: 1 }),
       row("airbnb", "2026-10-09", "2026-10-11", 400_000, { booked_at: "2026-08-01" }), // 금·토 밤
       row("trip", "2026-11-05", "2026-11-07", 200_000), // 앞으로의 예약
-    ], { today: "2026-10-18", roomCount: 1, monthsBack: 2, monthsAhead: 1 });
+    ], { today: "2026-10-18", from: "2026-09-01", to: "2026-10-19", openedOn: null, roomCount: 1, monthsAhead: 1 });
 
     expect(ins.months.map((m) => m.month)).toEqual(["2026-09", "2026-10", "2026-11"]);
     expect(ins.months[0].revenue.booking).toBe(200_000);
@@ -30,5 +31,14 @@ describe("통계 인사이트", () => {
     expect(ins.lead.map((b) => b.count)).toEqual([1, 0, 0, 0, 0, 1]);
     expect(ins.party.map((b) => b.count)).toEqual([0, 0, 1, 0, 0, 0]);
     expect(ins.stay.map((b) => b.count)).toEqual([0, 1, 1, 0, 0]);
+  });
+
+  it("오픈일 이전 날은 가동률 분모에서 빼고, 오픈 전 달은 비워 둔다", () => {
+    const rows = [row("airbnb", "2026-02-26", "2026-03-01", 300_000)];
+    const ins = buildInsights(rows, { today: "2026-03-01", from: "2026-01-01", to: "2026-03-02", openedOn: "2026-02-25", roomCount: 1, monthsAhead: 0 });
+    expect(ins.months.map((m) => m.month)).toEqual(["2026-02", "2026-03"]); // 오픈 전 1월은 뺀다
+    expect(ins.months[0].occupancy).toBeCloseTo(3 / 4); // 2/25~2/28 4일 중 3박
+    expect(ins.past).toMatchObject({ days: 4, nights: 3 });
+    expect(ins.past.occupancy).toBeCloseTo(3 / 4);
   });
 });

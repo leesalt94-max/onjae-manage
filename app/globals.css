@@ -131,3 +131,5 @@ tr.muted td { color: var(--muted); }
   .cols-axis { width: 32px; }
   .col-label.minor { display: none; }
 }
+.chip { text-decoration: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); font-size: 14px; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }

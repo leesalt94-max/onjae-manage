@@ -2,15 +2,15 @@ import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { money, pct } from "@/lib/format";
 import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
-import { buildInsights, stayRows } from "@/lib/insights";
-import { ageBands, genderBreakdown, getRoomCount, guestCoverage, monthlyByChannel, regionBreakdown, summary } from "@/lib/stats";
-import { CHANNEL_LABELS, CHANNELS, type Channel } from "@/lib/types";
+import { buildInsights, getOpenedOn, stayRows } from "@/lib/insights";
+import { ageBands, genderBreakdown, getRoomCount, guestCoverage, regionBreakdown, summary } from "@/lib/stats";
+import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
+import type { SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { Columns, HBars, Legend, ShareBar, type SeriesDef } from "./charts";
 
 export const dynamic = "force-dynamic";
 
-const MONTHS_BACK = 12;
 const MONTHS_AHEAD = 3;
 
 const SERIES: SeriesDef[] = CHANNELS.map((c) => ({ key: c, label: CHANNEL_LABELS[c], color: `var(--series-${c})` }));
@@ -19,32 +19,43 @@ const won = (n: number) => money(n, "KRW");
 const short = (n: number) => (n >= 10_000 ? `${Math.round(n / 10_000).toLocaleString("ko-KR")}만` : `${Math.round(n)}`);
 const pctOf = (n: number) => `${Math.round(n * 100)}%`;
 
-export default async function StatsPage() {
+const DAY = 86_400_000;
+const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+export default async function StatsPage({ searchParams }: { searchParams: SearchParams }) {
   await requireOwner();
   const sql = db();
+  const params = await searchParams;
   const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10); // 한국 날짜
-  const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
-  const yearAhead = new Date(Date.now() + 86_400_000 * 366).toISOString().slice(0, 10);
-  const roomCount = await getRoomCount(sql);
-  const [rows, monthly, sum, genders, ages, coverage, regions] = await Promise.all([
-    stayRows(sql, yearAgo, yearAhead),
-    monthlyByChannel(sql, MONTHS_BACK),
-    summary(sql, yearAgo, today),
-    genderBreakdown(sql, yearAgo, yearAhead),
-    ageBands(sql, yearAgo, yearAhead),
-    guestCoverage(sql, yearAgo, yearAhead),
-    regionBreakdown(sql, yearAgo, yearAhead),
+  const [roomCount, opened] = await Promise.all([getRoomCount(sql), getOpenedOn(sql)]);
+
+  // 기간: 기본은 오늘 기준 최근 1년. 빠른 선택(올해·오픈 이후)이나 직접 고른 날짜(끝 날짜 포함).
+  const yearAgo = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
+  const preset = typeof params.range === "string" ? params.range : "";
+  let from = yearAgo;
+  let toIncl = today;
+  if (preset === "year") from = `${today.slice(0, 4)}-01-01`;
+  else if (preset === "opened" && opened.date) from = opened.date;
+  else if (isDate(params.from) && isDate(params.to) && params.from <= params.to) {
+    from = params.from;
+    toIncl = params.to;
+  }
+  const to = addDays(toIncl, 1);
+  const custom = !preset && (from !== yearAgo || toIncl !== today);
+  const fetchTo = to > today ? addDays(today, 31 * (MONTHS_AHEAD + 1)) : to;
+
+  const [rows, sum, genders, ages, coverage, regions] = await Promise.all([
+    stayRows(sql, from, fetchTo),
+    summary(sql, from, to < today ? to : addDays(today, 1)),
+    genderBreakdown(sql, from, to),
+    ageBands(sql, from, to),
+    guestCoverage(sql, from, to),
+    regionBreakdown(sql, from, to),
   ]);
   const regionTotal = regions.reduce((a, r) => a + r.count, 0);
-  const ins = buildInsights(rows, { today, roomCount, monthsBack: MONTHS_BACK, monthsAhead: MONTHS_AHEAD });
-
-  // 채널별 수수료: 체크인이 오늘 이전인 원화 예약만.
-  const thisMonth = today.slice(0, 7);
-  const commission = new Map<Channel, number>();
-  for (const r of monthly) {
-    if (r.currency !== "KRW" || r.month > thisMonth) continue;
-    commission.set(r.channel, (commission.get(r.channel) ?? 0) + r.commission);
-  }
+  const ins = buildInsights(rows, { today, from, to, openedOn: opened.date, roomCount, monthsAhead: MONTHS_AHEAD });
+  const occStart = opened.date && opened.date > from ? opened.date : from;
 
   const monthLabel = (m: string, i: number) => (i === 0 || m.endsWith("-01") ? `${m.slice(2, 4)}.${Number(m.slice(5))}` : `${Number(m.slice(5))}`);
   const revenuePoints = ins.months.map((m, i) => ({
@@ -59,9 +70,9 @@ export default async function StatsPage() {
     key: m.month,
     label: monthLabel(m.month, i),
     minor: i % 2 === 1,
-    values: { occ: m.occupancy },
+    values: { occ: m.occupancy ?? 0 },
     muted: m.future,
-    title: `${m.month} 가동률 ${pctOf(m.occupancy)} (${m.nights}박)${m.future ? " · 예약된 것만" : ""}`,
+    title: m.occupancy === null ? `${m.month} 오픈 전` : `${m.month} 가동률 ${pctOf(m.occupancy)} (${m.nights}박)${m.future ? " · 예약된 것만" : ""}`,
   }));
   const leadTotal = ins.lead.reduce((a, b) => a + b.count, 0);
   const stayTotal = ins.stay.reduce((a, b) => a + b.count, 0);
@@ -71,7 +82,24 @@ export default async function StatsPage() {
   return (
     <OwnerShell>
       <h1>통계</h1>
-      <p className="muted">최근 12개월(오늘까지) 확정 예약 기준입니다. 취소된 예약은 빼고 계산해요.</p>
+      <div className="panel">
+        <div className="row">
+          <a className={`chip${!preset && !custom ? " on" : ""}`} href="/stats">최근 1년</a>
+          <a className={`chip${preset === "year" ? " on" : ""}`} href="/stats?range=year">올해</a>
+          {opened.date && <a className={`chip${preset === "opened" ? " on" : ""}`} href="/stats?range=opened">오픈 이후</a>}
+        </div>
+        <form method="get" className="row" style={{ marginTop: 10 }}>
+          <input type="date" name="from" defaultValue={from} aria-label="시작 날짜" />
+          <span>~</span>
+          <input type="date" name="to" defaultValue={toIncl} aria-label="끝 날짜" />
+          <button type="submit">보기</button>
+        </form>
+        <p className="muted small" style={{ marginBottom: 0 }}>
+          {from} ~ {toIncl} 확정 예약 기준이에요. 취소된 예약은 빼요.
+          {opened.date && ` 가동률은 오픈일(${opened.date}${opened.fromSetting ? "" : ", 첫 체크인 기준"}) 이후 날만 셉니다.`}
+          {opened.date && !opened.fromSetting && <> <a href="/settings">오픈일 바꾸기</a></>}
+        </p>
+      </div>
 
       {ins.notes.length > 0 && (
         <div className="panel insights">
@@ -81,8 +109,8 @@ export default async function StatsPage() {
       )}
 
       <div className="grid">
-        <div className="panel kpi"><div className="label">정산액 (12개월)</div><div className="value">{short(ins.past.revenue)}원</div></div>
-        <div className="panel kpi"><div className="label">가동률</div><div className="value">{pctOf(ins.past.occupancy)}</div></div>
+        <div className="panel kpi"><div className="label">정산액</div><div className="value">{short(ins.past.revenue)}원</div></div>
+        <div className="panel kpi"><div className="label">가동률 ({occStart.slice(5).replace("-", "/")}~)</div><div className="value">{pctOf(ins.past.occupancy)}</div></div>
         <div className="panel kpi"><div className="label">박당 정산액</div><div className="value">{ins.past.adr ? won(ins.past.adr) : "-"}</div></div>
         <div className="panel kpi"><div className="label">평균 예약 시점</div><div className="value">{sum.avgLeadDays ?? "-"}일 전</div></div>
         <div className="panel kpi"><div className="label">취소율</div><div className="value">{pct(sum.cancelled, sum.bookings + sum.cancelled)}</div></div>
@@ -98,7 +126,7 @@ export default async function StatsPage() {
       <h2>월별 가동률</h2>
       <div className="panel">
         <Columns points={occPoints} series={[{ key: "occ", label: "가동률", color: "var(--series-1)" }]} format={pctOf} refLine={1} />
-        <p className="muted small">객실 {roomCount}개 기준. 100%를 넘는 달은 겹친 예약(오버부킹)이 있었다는 뜻이에요.</p>
+        <p className="muted small">객실 {roomCount}개 기준, 오픈 전 날은 빼고 계산해요. 100%를 넘는 달은 겹친 예약(오버부킹)이 있었다는 뜻이에요.</p>
       </div>
 
       <h2>채널</h2>
@@ -115,7 +143,7 @@ export default async function StatsPage() {
                   <td className="num">{c.nights}박</td>
                   <td className="num">{won(c.revenue)}</td>
                   <td className="num">{c.adr ? won(c.adr) : "-"}</td>
-                  <td className="num wide-only">{commission.has(c.channel) ? won(commission.get(c.channel)!) : "-"}</td>
+                  <td className="num wide-only">{c.commission ? won(c.commission) : "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -198,7 +226,7 @@ export default async function StatsPage() {
                 return (
                   <tr key={m.month} className={m.future ? "muted" : undefined}>
                     <td>{m.month}{m.future ? " (예약분)" : ""}</td>
-                    <td className="num">{pctOf(m.occupancy)}</td>
+                    <td className="num">{m.occupancy === null ? "-" : pctOf(m.occupancy)}</td>
                     <td className="num">{m.nights}</td>
                     {CHANNELS.map((c) => <td key={c} className="num">{won(m.revenue[c])}</td>)}
                     <td className="num">{won(total)}</td>
