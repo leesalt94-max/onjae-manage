@@ -13,9 +13,15 @@ async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
 
   ctx.log("로그인 시작");
   await assertNoCaptcha(page);
-  const user = await firstVisible(page, [page.locator('input[name="loginname"]'), page.locator('input[name="username"]')]);
+  const user = await firstVisible(page, [
+    page.locator('input[name="loginname"]'),
+    page.locator('input[name="username"]'),
+    page.getByRole("textbox", { name: /username|login name|아이디/i }),
+    page.locator('input[autocomplete="username"], input[type="email"]'),
+  ]);
   if (!user) throw new CollectorError("부킹닷컴 로그인 화면이 바뀌어 아이디 입력란을 찾지 못했습니다.");
   await user.fill(login.username);
+  await ctx.snap?.("username");
   await (await firstVisible(page, byButton(page, /^next$|^다음$/i)))?.click();
 
   const password = await firstVisible(page, [page.locator('input[name="password"]'), page.locator('input[type="password"]')]);
@@ -24,8 +30,11 @@ async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
     throw new CollectorError("부킹닷컴 비밀번호 입력란을 찾지 못했습니다.");
   }
   await password.fill(login.password);
-  await (await firstVisible(page, byButton(page, /sign in|로그인/i)))?.click();
+  await ctx.snap?.("password");
+  await (await firstVisible(page, byButton(page, /^sign in$|^로그인$/i)))?.click();
   await page.waitForLoadState("domcontentloaded");
+  await page.waitForTimeout(3_000);
+  await ctx.snap?.("after-sign-in");
   await assertNoCaptcha(page);
 
   // 엑스트라넷은 새 기기마다 인증을 요구한다. 문자 방식을 고르고 코드를 받는다.
@@ -34,6 +43,7 @@ async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
     await sms.click();
     await (await firstVisible(page, byButton(page, /send verification code|send code|인증 코드 보내기|보내기/i), 3_000))?.click();
   }
+  await ctx.snap?.("verification");
   await handleOtpIfAsked(ctx, /verify|확인/i);
   await page.waitForURL(/admin\.booking\.com\/hotel/, { timeout: 30_000 }).catch(() => {
     throw new CollectorError("부킹닷컴 로그인에 실패했습니다. 비밀번호를 확인해 주세요.", true);

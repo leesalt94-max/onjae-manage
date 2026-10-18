@@ -1,5 +1,5 @@
 import {
-  assertNoCaptcha, byButton, CollectorError, downloadText, firstVisible, handleOtpIfAsked,
+  assertNoCaptcha, byButton, byText, CollectorError, dismissPopups, downloadText, firstVisible, handleOtpIfAsked,
   type CollectorContext, type PlatformAdapter,
 } from "../helpers";
 
@@ -36,10 +36,15 @@ export const trip: PlatformAdapter = {
   async collect(ctx) {
     const { page } = ctx;
     await ensureLoggedIn(ctx);
-    const orders = await firstVisible(page, byButton(page, /orders|order management|订单|주문|예약/i), 15_000);
+    // 2026-10 기준: 로그인 직후 'eBooking Genie' 안내 창이 뜨고, 왼쪽 메뉴 이름은 Reservations.
+    await dismissPopups(page);
+    await ctx.snap?.("home");
+    const orders = await firstVisible(page, byText(page, /^(reservations|orders|order management|订单|예약|주문)$/i), 15_000);
     if (!orders) throw new CollectorError("트립닷컴 주문 메뉴를 찾지 못했습니다.");
     await orders.click();
     await page.waitForLoadState("domcontentloaded");
+    await dismissPopups(page);
+    await ctx.snap?.("reservations");
     const exportButton = await firstVisible(page, byButton(page, /export|download|导出|내보내기|다운로드/i), 15_000);
     if (!exportButton) throw new CollectorError("트립닷컴 주문 내보내기 버튼을 찾지 못했습니다.");
     return [await downloadText(page, () => exportButton.click())];

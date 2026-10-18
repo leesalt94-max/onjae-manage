@@ -9,6 +9,8 @@ export interface CollectorContext {
   /** 2단계 인증 코드를 사장님께 요청하고 입력을 기다린다. 시간이 지나면 null. */
   requestOtp: (prompt: string) => Promise<string | null>;
   log: (msg: string) => void;
+  /** 디버그 실행일 때 지금 화면을 저장한다. 실패 원인을 단계별로 보기 위함. */
+  snap?: (step: string) => Promise<void>;
 }
 
 export interface PlatformAdapter {
@@ -39,6 +41,22 @@ export async function firstVisible(page: Page, candidates: Locator[], timeoutMs 
 
 export function byButton(page: Page, names: RegExp): Locator[] {
   return [page.getByRole("button", { name: names }), page.getByRole("link", { name: names }), page.getByRole("menuitem", { name: names })];
+}
+
+/** 버튼·링크가 아닌 div 로 만든 메뉴도 있어서, 글자가 정확히 같은 요소까지 후보로 둔다. */
+export function byText(page: Page, names: RegExp): Locator[] {
+  return [...byButton(page, names), page.getByText(names)];
+}
+
+/** 로그인 직후 뜨는 안내 창(새 기능 소개 등)을 닫는다. 없으면 아무것도 하지 않는다. */
+export async function dismissPopups(page: Page): Promise<void> {
+  await page.keyboard.press("Escape").catch(() => {});
+  const close = await firstVisible(page, [
+    page.getByRole("button", { name: /^(close|닫기|关闭|×)$/i }),
+    page.locator('[aria-label*="close" i]'),
+    page.locator('[class*="modal" i] [class*="close" i], [class*="dialog" i] [class*="close" i], [class*="popup" i] [class*="close" i]'),
+  ], 2_000);
+  if (close) await close.click().catch(() => {});
 }
 
 export const OTP_INPUTS = (page: Page): Locator[] => [

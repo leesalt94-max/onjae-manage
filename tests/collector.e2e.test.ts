@@ -11,9 +11,10 @@ HMTEST01,Confirmed,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"₩450,00
 
 const page = (body: string) => `<!doctype html><html><body>${body}</body></html>`;
 
-const LOGIN = page(`<button id="e" onclick="document.getElementById('f').style.display='block'">Continue with email</button>
-  <form id="f" style="display:none" onsubmit="event.preventDefault()">
-    <input name="user[email]" type="email">
+// 2026-10 실제 화면처럼 "Phone number or email" 칸 하나에 이메일을 넣고 Continue → 비밀번호 → Log in.
+const LOGIN = page(`<h1>Log in or sign up</h1>
+  <form onsubmit="event.preventDefault()">
+    <input aria-label="Phone number or email" placeholder="Phone number or email" type="text" name="identifier">
     <button type="button" onclick="document.getElementById('p').style.display='block'">Continue</button>
     <div id="p" style="display:none"><input name="user[password]" type="password">
     <button type="button" onclick="location.href='/verify'">Log in</button></div>

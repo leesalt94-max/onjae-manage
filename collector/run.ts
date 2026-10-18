@@ -1,5 +1,5 @@
 import { mkdir } from "node:fs/promises";
-import { chromium, type BrowserContextOptions } from "playwright";
+import { chromium, type BrowserContextOptions, type Page } from "playwright";
 import { loadEnabledLogins, saveSessionState, type PlatformLogin } from "../lib/credentials";
 import { db } from "../lib/db";
 import { intEnv } from "../lib/env";
@@ -16,7 +16,15 @@ import { trip } from "./platforms/trip";
 // GitHub Actions 에서 3시간마다 실행. 플랫폼마다 따로 돌아서 하나가 실패해도 나머지는 계속한다.
 const ADAPTERS: Record<string, PlatformAdapter> = { airbnb, booking, trip };
 
-async function collectOne(login: PlatformLogin): Promise<void> {
+const DEBUG = process.env.DEBUG_SCREENSHOTS === "1";
+
+async function screenshot(page: Page, name: string) {
+  await mkdir("debug-screenshots", { recursive: true });
+  await page.screenshot({ path: `debug-screenshots/${name}-${Date.now()}.png`, fullPage: true }).catch(() => {});
+}
+
+/** 성공하면 true. 실패는 기록·알림까지 마치고 false 를 돌려준다. */
+async function collectOne(login: PlatformLogin): Promise<boolean> {
   const sql = db();
   const adapter = ADAPTERS[login.channel];
   const label = CHANNEL_LABELS[login.channel];
@@ -38,6 +46,7 @@ async function collectOne(login: PlatformLogin): Promise<void> {
       page,
       login,
       log,
+      snap: DEBUG ? (step) => screenshot(page, `${login.channel}-${step}`) : undefined,
       requestOtp: (prompt) => requestOtp(sql, login.channel, prompt, intEnv("OTP_WAIT_MINUTES", 8)),
     });
     // 로그인 상태를 저장해 두면 다음 실행 때 인증 없이 들어간다.
@@ -56,15 +65,14 @@ async function collectOne(login: PlatformLogin): Promise<void> {
     await finishSyncRun(sql, runId, { ok: true, ...result });
     log(`완료: 새 예약 ${result.inserted}건, 갱신 ${result.updated}건`);
     if (result.inserted > 0) await sendKakao(sql, `[${label}] 새 예약 ${result.inserted}건이 들어왔어요.`, "/reservations");
+    return true;
   } catch (err) {
     const message = err instanceof CollectorError ? err.message : `${label} 수집 중 오류: ${(err as Error).message}`;
     log(`실패: ${message}`);
-    if (process.env.DEBUG_SCREENSHOTS === "1") {
-      await mkdir("debug-screenshots", { recursive: true });
-      await page.screenshot({ path: `debug-screenshots/${login.channel}-${Date.now()}.png`, fullPage: true }).catch(() => {});
-    }
+    if (DEBUG) await screenshot(page, `${login.channel}-failed`);
     await finishSyncRun(sql, runId, { ok: false, error: message.slice(0, 500) });
     await notifyFailure(login, message);
+    return false;
   } finally {
     await browser.close();
   }
@@ -89,8 +97,14 @@ async function main() {
   }
   const logins = all.filter((l) => !only || l.channel === only);
   if (logins.length === 0) console.log("자동 수집할 플랫폼 로그인 정보가 없습니다. 사이트 설정에서 먼저 등록하세요.");
-  for (const login of logins) await collectOne(login);
+  let failed = 0;
+  for (const login of logins) if (!(await collectOne(login))) failed++;
   await sql.end();
+  // 전부 실패하면 GitHub 화면에 빨간 ✗ 로 보이게 한다. 일부만 실패하면 카톡 알림으로 충분하다.
+  if (logins.length > 0 && failed === logins.length) {
+    console.error(`모든 플랫폼(${failed}곳) 수집에 실패했습니다.`);
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {
