@@ -7,6 +7,9 @@ import { CHANNEL_LABELS } from "@/lib/types";
 import { saveGuestsAction } from "../../actions";
 import { Flash, type SearchParams } from "../../flash";
 import { OwnerShell } from "../../nav";
+import { CalcBox } from "../amount";
+import { computeAmounts } from "@/lib/amounts";
+import { getTripConfig } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +26,7 @@ export default async function ReservationGuestsPage({
   const data = Number.isInteger(id) && id > 0 ? await getReservationGuests(db(), id) : null;
   if (!data) notFound();
   const { reservation: r, guests } = data;
+  const amounts = computeAmounts(r, await getTripConfig(db()));
 
   // 줄 수: 이미 입력한 인원, 플랫폼 인원수 중 큰 값. "한 명 추가"로 늘릴 수 있다.
   const headcount = (r.adults ?? 0) + (r.children ?? 0) + (r.infants ?? 0);
@@ -44,6 +48,13 @@ export default async function ReservationGuestsPage({
           {r.check_in} ~ {r.check_out} ({r.nights}박) · 플랫폼 인원: 성인 {r.adults ?? "-"}, 아동 {r.children ?? "-"}, 유아 {r.infants ?? "-"}
         </p>
       </div>
+
+      {amounts.steps.length > 0 && (
+        <div className="panel">
+          <strong>금액 계산{amounts.estimated ? " (역산)" : ""}</strong>
+          <CalcBox amounts={amounts} currency={r.currency} inline />
+        </div>
+      )}
 
       <form action={saveGuestsAction} className="panel stack" style={{ maxWidth: 520 }}>
         <input type="hidden" name="reservationId" value={r.id} />

@@ -49,14 +49,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <div className="panel">
         <p className="muted">
           트립닷컴 선결제 예약은 파일에 입금가(정산액)만 있습니다. 수수료는 객실 요금에만 붙고 청소비는 그대로 들어오므로,
-          객실 판매가 = (입금가 − 청소비) ÷ (1 − 수수료율)로 역산해 통계의 결제액·수수료·실수익률에 씁니다. 수수료율을 비워 두면
-          역산하지 않습니다.
+          객실 판매가 = (입금가 − 청소비) ÷ (1 − 수수료율)로 역산해 예약 목록과 통계의 결제액·수수료에 씁니다. 비워 두면 기본값
+          (15%, 50,000원)을 씁니다.
         </p>
         <form action={saveTripCommissionAction} className="row">
-          <input type="number" name="tripCommissionPct" min={0.1} max={99.9} step={0.1} defaultValue={tripPct ?? ""} placeholder="예: 15" style={{ width: 100 }} />
+          <input type="number" name="tripCommissionPct" min={0.1} max={99.9} step={0.1} defaultValue={tripPct} placeholder="예: 15" style={{ width: 100 }} />
           <span>%</span>
           <span style={{ marginLeft: 12 }}>예약당 청소비</span>
-          <input type="number" name="tripCleaningFee" min={0} step={1000} defaultValue={tripCleaning || ""} placeholder="예: 50000" style={{ width: 120 }} />
+          <input type="number" name="tripCleaningFee" min={0} step={1000} defaultValue={tripCleaning} placeholder="예: 50000" style={{ width: 120 }} />
           <span>원</span>
           <button type="submit">저장</button>
         </form>

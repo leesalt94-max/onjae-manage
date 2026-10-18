@@ -133,3 +133,19 @@ tr.muted td { color: var(--muted); }
 }
 .chip { text-decoration: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); font-size: 14px; }
 .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* 금액 계산 과정 펼치기 */
+details.calc { display: inline-block; position: relative; }
+details.calc summary { cursor: pointer; list-style: none; text-decoration: underline dotted; text-underline-offset: 3px; }
+details.calc summary::-webkit-details-marker { display: none; }
+details.calc sup { color: var(--muted); }
+.calc-box { position: absolute; right: 0; z-index: 10; margin-top: 6px; width: 320px; max-width: 86vw; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  text-align: left; white-space: normal; }
+.calc-box table { font-size: 13px; }
+.calc-box td { white-space: normal; padding: 4px 6px; }
+.calc-box p { margin: 6px 0 0; }
+.card details.calc .calc-box { left: 0; right: auto; }
+.calc-inline table { font-size: 14px; max-width: 480px; }
+.calc-inline td { white-space: normal; }
+/* 계산 과정 상자가 표 밖으로 펼쳐지도록 (가로 스크롤 대신) */
+.table-wrap.calc-host { overflow: visible; }

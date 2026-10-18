@@ -109,7 +109,7 @@ export async function saveTripCommissionAction(formData: FormData) {
   const sql = db();
   await setSetting(sql, "trip_commission_pct", pctRaw);
   await setSetting(sql, "trip_cleaning_fee", feeRaw);
-  back("/settings", pctRaw ? `트립닷컴 수수료율 ${pct}%, 청소비 ${feeRaw || 0}원으로 저장했습니다. 통계에 바로 반영됩니다.` : "트립닷컴 역산을 껐습니다.");
+  back("/settings", `트립닷컴 수수료율 ${pctRaw || "15(기본)"}%, 청소비 ${feeRaw || "50,000(기본)"}원으로 계산합니다.`);
 }
 
 export async function kakaoTestAction() {

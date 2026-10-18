@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { TRIP_DEFAULTS, type TripConfig } from "./amounts";
 import { intEnv } from "./env";
 import { getSetting } from "./settings";
 import type { Channel } from "./types";
@@ -24,20 +25,28 @@ export interface MonthlyChannelRow {
 // (2026-10 사장님 확인). 그래서 설정의 수수료율·예약당 청소비로 역산한다:
 // 객실 판매가 = (입금가 − 청소비) ÷ (1 − 수수료율), 결제액 = 객실 판매가 + 청소비, 수수료 = 결제액 − 입금가.
 // 수수료율이 비어 있으면 역산하지 않는다.
-export async function getTripCommissionPct(sql: postgres.Sql): Promise<number | null> {
-  const n = Number((await getSetting(sql, "trip_commission_pct")) ?? "");
-  return Number.isFinite(n) && n > 0 && n < 100 ? n : null;
+// 비어 있으면 사장님이 확인한 기본값(15%, 청소비 50,000원)을 쓴다.
+export async function getTripCommissionPct(sql: postgres.Sql): Promise<number> {
+  const raw = await getSetting(sql, "trip_commission_pct");
+  const n = Number(raw ?? "");
+  return raw && Number.isFinite(n) && n > 0 && n < 100 ? n : TRIP_DEFAULTS.commissionPct;
 }
 
 export async function getTripCleaningFee(sql: postgres.Sql): Promise<number> {
-  const n = Number((await getSetting(sql, "trip_cleaning_fee")) ?? "");
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  const raw = await getSetting(sql, "trip_cleaning_fee");
+  const n = Number(raw ?? "");
+  return raw && Number.isFinite(n) && n >= 0 ? n : TRIP_DEFAULTS.cleaningFee;
+}
+
+export async function getTripConfig(sql: postgres.Sql): Promise<TripConfig> {
+  const [commissionPct, cleaningFee] = await Promise.all([getTripCommissionPct(sql), getTripCleaningFee(sql)]);
+  return { commissionPct, cleaningFee };
 }
 
 // 체크인 월 기준, 취소·노쇼 제외.
 export async function monthlyByChannel(sql: postgres.Sql, months = 12): Promise<MonthlyChannelRow[]> {
   const [tripPct, cleaning] = await Promise.all([getTripCommissionPct(sql), getTripCleaningFee(sql)]);
-  const tripRate = tripPct ?? 0;
+  const tripRate = tripPct;
   return sql<MonthlyChannelRow[]>`
     WITH r AS (
       SELECT *,

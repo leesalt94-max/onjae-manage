@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { money, pct } from "@/lib/format";
 import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
 import { buildInsights, getOpenedOn, stayRows } from "@/lib/insights";
-import { ageBands, genderBreakdown, getRoomCount, guestCoverage, regionBreakdown, summary } from "@/lib/stats";
+import { computeAmounts } from "@/lib/amounts";
+import { ageBands, genderBreakdown, getRoomCount, getTripConfig, guestCoverage, regionBreakdown, summary } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
 import type { SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
@@ -54,6 +55,11 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
     regionBreakdown(sql, from, to),
   ]);
   const regionTotal = regions.reduce((a, r) => a + r.count, 0);
+  // 트립닷컴처럼 수수료가 파일에 없는 예약은 예약 목록과 같은 방식으로 역산해 채널 표에 넣는다.
+  const trip = await getTripConfig(sql);
+  for (const r of rows) {
+    if (r.commission === null) r.commission = computeAmounts({ channel: r.channel, guest_paid: null, commission: null, payout_amount: r.payout }, trip).commission;
+  }
   const ins = buildInsights(rows, { today, from, to, openedOn: opened.date, roomCount, monthsAhead: MONTHS_AHEAD });
   const occStart = opened.date && opened.date > from ? opened.date : from;
 
