@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { chromium, type BrowserContextOptions, type Page } from "playwright";
-import { loadEnabledLogins, saveSessionState, type PlatformLogin } from "../lib/credentials";
+import { loadEnabledLogins, saveSessionState, setEnabled, type PlatformLogin } from "../lib/credentials";
 import { db } from "../lib/db";
 import { intEnv } from "../lib/env";
 import { finishSyncRun, startSyncRun, upsertReservations } from "../lib/ingest";
@@ -8,7 +8,7 @@ import { sendKakao } from "../lib/kakao";
 import { requestOtp } from "../lib/otp";
 import { parseExport } from "../lib/parsers";
 import { CHANNEL_LABELS, type NormalizedReservation } from "../lib/types";
-import { CollectorError, type PlatformAdapter } from "./helpers";
+import { BlockedError, CollectorError, type PlatformAdapter } from "./helpers";
 import { airbnb } from "./platforms/airbnb";
 import { booking } from "./platforms/booking";
 import { trip } from "./platforms/trip";
@@ -71,6 +71,7 @@ async function collectOne(login: PlatformLogin): Promise<boolean> {
     log(`실패: ${message}`);
     if (DEBUG) await screenshot(page, `${login.channel}-failed`);
     await finishSyncRun(sql, runId, { ok: false, error: message.slice(0, 500) });
+    if (err instanceof BlockedError) await setEnabled(sql, login.channel, false);
     await notifyFailure(login, message);
     return false;
   } finally {

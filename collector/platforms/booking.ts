@@ -24,6 +24,8 @@ async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
   await ctx.snap?.("username");
   await (await firstVisible(page, byButton(page, /^next$|^다음$/i)))?.click();
 
+  await page.waitForTimeout(1_500);
+  await assertNoCaptcha(page);
   const password = await firstVisible(page, [page.locator('input[name="password"]'), page.locator('input[type="password"]')]);
   if (!password) {
     await assertNoCaptcha(page);

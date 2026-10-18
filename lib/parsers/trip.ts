@@ -6,7 +6,7 @@ import {
 // 트립닷컴 이부킹(ebooking) 주문 내보내기. 실제 파일을 아직 보지 못해 영어·중국어·한국어 헤더를 넓게 받는다.
 // 첫 실제 파일을 받으면 헤더를 확인해 여기 별칭을 보강해야 한다.
 const T = {
-  confirmation: ["Order ID", "Order No.", "Booking No.", "订单号", "주문번호", "예약번호"],
+  confirmation: ["Reservation", "Reservation no.", "Reservation No.", "Order ID", "Order No.", "Booking No.", "订单号", "주문번호", "예약번호"],
   checkIn: ["Check-in", "Check-in date", "Arrival date", "入住日期", "체크인"],
   checkOut: ["Check-out", "Check-out date", "Departure date", "离店日期", "체크아웃"],
   booked: ["Booking date", "Order date", "预订日期", "下单时间", "예약일"],
@@ -15,7 +15,7 @@ const T = {
   children: ["Children", "儿童", "아동"],
   guests: ["Guests", "人数", "인원"],
   roomNights: ["Room nights", "Nights", "间夜", "숙박일수"],
-  total: ["Total price", "Total amount", "Selling price", "总价", "판매가"],
+  total: ["Amount", "Total price", "Total amount", "Selling price", "总价", "판매가"],
   settlement: ["Settlement amount", "Payable amount", "Net price", "结算价", "结算金额", "정산금액"],
   commission: ["Commission", "佣金", "수수료"],
   currency: ["Currency", "币种", "통화"],

@@ -109,3 +109,23 @@ describe("트립닷컴", () => {
     expect(JSON.stringify(reservations)).not.toMatch(/ZHANG|LI\/SI/);
   });
 });
+
+describe("엑셀(xlsx) 내보내기", () => {
+  it("첫 시트를 CSV 로 바꿔 트립닷컴 화면과 같은 헤더를 읽고, 게스트 이름은 버린다", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const { xlsxToCsv } = await import("../lib/parsers/xlsx");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Reservations");
+    ws.addRow(["Guest(s)", "Amount", "Check-in", "Check-out", "Room type", "Booking date", "Reservation", "Status"]);
+    ws.addRow(["KIM/TEST", "KRW 237169.00", "Nov 7, 2026", "Nov 8, 2026", "Queen Bed 2 Room, 1 room(s)", "Sep 29, 2026", "1400829519763961", "Confirmed"]);
+    const csv = await xlsxToCsv(Buffer.from(await wb.xlsx.writeBuffer()));
+    const { reservations } = parseExport("trip", csv);
+    expect(reservations).toHaveLength(1);
+    const r = reservations[0];
+    expect(r.confirmation).toBe("1400829519763961");
+    expect(r.checkIn).toBe("2026-11-07");
+    expect(r.nights).toBe(1);
+    expect(r.status).toBe("confirmed");
+    expect(JSON.stringify(r.raw)).not.toContain("KIM");
+  });
+});

@@ -45,8 +45,17 @@ export const trip: PlatformAdapter = {
     await page.waitForLoadState("domcontentloaded");
     await dismissPopups(page);
     await ctx.snap?.("reservations");
-    const exportButton = await firstVisible(page, byButton(page, /export|download|导出|내보내기|다운로드/i), 15_000);
+    // 2026-10 기준: 목록 오른쪽 위 "Download". 누르면 형식·기간을 고르는 창이 뜰 수 있어 확인 버튼도 눌러 본다.
+    const exportButton = await firstVisible(page, byText(page, /^(download|export|导出|下载|내보내기|다운로드)$/i), 15_000);
     if (!exportButton) throw new CollectorError("트립닷컴 주문 내보내기 버튼을 찾지 못했습니다.");
-    return [await downloadText(page, () => exportButton.click())];
+    return [await downloadText(page, async () => {
+      await exportButton.click();
+      await page.waitForTimeout(2_000);
+      await ctx.snap?.("after-download-click");
+      const confirm = await firstVisible(page, [
+        page.locator('[role="dialog"], [class*="modal" i], [class*="drawer" i]').getByRole("button", { name: /^(download|export|confirm|ok|确定|导出|下载|확인|다운로드)$/i }),
+      ], 3_000);
+      if (confirm) await confirm.click();
+    })];
   },
 };

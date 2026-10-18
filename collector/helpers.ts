@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import type { Locator, Page } from "playwright";
+import type { Download, Locator, Page } from "playwright";
+import { xlsxToCsv } from "../lib/parsers/xlsx";
 import type { PlatformLogin } from "../lib/credentials";
 import type { Channel } from "../lib/types";
 
@@ -23,6 +24,13 @@ export interface PlatformAdapter {
 export class CollectorError extends Error {
   constructor(message: string, readonly needsOwner = false) {
     super(message);
+  }
+}
+
+/** 플랫폼이 자동 접속을 막았다. 계속 시도하면 계정이 제한될 수 있어 그 플랫폼 자동 수집을 끈다. */
+export class BlockedError extends CollectorError {
+  constructor(message: string) {
+    super(message, true);
   }
 }
 
@@ -65,13 +73,15 @@ export const OTP_INPUTS = (page: Page): Locator[] => [
   page.locator('input[inputmode="numeric"]'),
 ];
 
-/** 캡차는 풀지 않는다(약관·보안상). 보이면 바로 멈추고 사장님께 알린다. */
+/** 캡차·접속 제한은 풀거나 우회하지 않는다(약관·보안상). 보이면 바로 멈추고 사장님께 알린다. */
 export async function assertNoCaptcha(page: Page): Promise<void> {
   const captcha = page.locator(
     'iframe[src*="captcha" i], iframe[src*="arkose" i], iframe[src*="recaptcha" i], iframe[title*="challenge" i], #px-captcha',
   );
-  if (await captcha.first().isVisible().catch(() => false)) {
-    throw new CollectorError("로그인 중 로봇 확인(캡차)이 나와 멈췄습니다. 이번 달은 CSV 업로드로 대신해 주세요.", true);
+  // 2026-10 실제로 본 화면: 부킹닷컴 "Let's make sure you're human"(그림 고르기), 에어비앤비 "access quota" 안내.
+  const blockedText = page.getByText(/make sure you.?re human|are you a robot|access quota|unusual (activity|traffic)/i);
+  if (await captcha.first().isVisible().catch(() => false) || await blockedText.first().isVisible().catch(() => false)) {
+    throw new BlockedError("플랫폼이 자동 로그인을 로봇으로 보고 막았습니다(로봇 확인·접속 제한). 계정 보호를 위해 이 플랫폼 자동 수집을 껐어요. 당분간 파일 올리기로 대신해 주세요.");
   }
 }
 
@@ -90,17 +100,31 @@ export async function handleOtpIfAsked(ctx: CollectorContext, submit: RegExp): P
   return true;
 }
 
-/** 버튼을 눌러 내려받은 파일의 내용을 텍스트로. */
+/** 버튼을 눌러 내려받은 파일의 내용을 텍스트로. 새 탭에서 받아지는 경우와 엑셀(xlsx)도 처리한다. */
 export async function downloadText(page: Page, trigger: () => Promise<void>, timeoutMs = 60_000): Promise<string> {
-  const [download] = await Promise.all([page.waitForEvent("download", { timeout: timeoutMs }), trigger()]);
+  const context = page.context();
+  const download = await new Promise<Download>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new CollectorError("내보내기 버튼을 눌렀지만 파일이 받아지지 않았습니다."));
+    }, timeoutMs);
+    const onDownload = (d: Download) => { cleanup(); resolve(d); };
+    const watch = (p: Page) => p.on("download", onDownload);
+    const cleanup = () => {
+      clearTimeout(timer);
+      for (const p of context.pages()) p.off("download", onDownload);
+      context.off("page", watch);
+    };
+    for (const p of context.pages()) watch(p);
+    context.on("page", watch);
+    trigger().catch((err) => { cleanup(); reject(err); });
+  });
   const filePath = await download.path();
   if (!filePath) throw new CollectorError("내보내기 파일을 받지 못했습니다.");
   const buf = await readFile(filePath);
   if (buf[0] === 0xd0 && buf[1] === 0xcf) {
-    throw new CollectorError("엑셀(xls) 형식으로 내려받아졌습니다. CSV 형식 선택이 필요합니다.");
+    throw new CollectorError("옛 엑셀(xls) 형식으로 내려받아졌습니다. CSV 나 xlsx 형식 선택이 필요합니다.");
   }
-  if (buf[0] === 0x50 && buf[1] === 0x4b) {
-    throw new CollectorError("엑셀(xlsx) 형식으로 내려받아졌습니다. CSV 형식 선택이 필요합니다.");
-  }
+  if (buf[0] === 0x50 && buf[1] === 0x4b) return xlsxToCsv(buf);
   return buf.toString("utf8");
 }
