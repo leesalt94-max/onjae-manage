@@ -42,3 +42,15 @@ describe("통계 인사이트", () => {
     expect(ins.past.occupancy).toBeCloseTo(3 / 4);
   });
 });
+
+describe("앞으로 30일 알림", () => {
+  it("빈 금·토요일과 예약 사이에 끼인 1박을 찾는다", async () => {
+    const { aheadNotes } = await import("../lib/insights");
+    const row = (check_in: string, check_out: string) => ({ channel: "airbnb" as const, check_in, check_out, nights: 1, booked_at: null, adults: null, children: null, payout: 100, commission: null });
+    // 2026-11-02(월) 기준: 11/3~11/5 예약, 11/6 비고, 11/7~11/8 예약 → 11/6(금)이 끼인 1박
+    const notes = aheadNotes([row("2026-11-03", "2026-11-06"), row("2026-11-07", "2026-11-08")], "2026-11-02", 1);
+    expect(notes.find((n) => n.tag === "끼인 하루")?.text).toContain("11/6");
+    expect(notes.find((n) => n.tag === "빈 주말")?.text).toMatch(/^아직 빈 금·토요일 밤: 11\/6, 11\/13/);
+    expect(notes[0].text).toContain("4밤이 찼고 26밤이 비어 있어요");
+  });
+});

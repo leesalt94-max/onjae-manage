@@ -34,6 +34,7 @@ export interface MonthPoint {
   revenue: Record<Channel, number>;
   nights: number;
   occupancy: number | null; // 0~1+ (오버부킹이면 1을 넘을 수 있다). 오픈 전 달은 null
+  available: number; // 그 달 팔 수 있던 밤 (오픈 전 날 제외, 객실 수 곱함)
 }
 
 export interface Bucket { label: string; count: number; revenue: number; nights: number }
@@ -46,8 +47,11 @@ export interface Insights {
   lead: Bucket[];
   stay: Bucket[];
   party: Bucket[];
-  notes: string[];
+  notes: Note[];
 }
+
+/** 한눈에 보기 한 줄. tag 는 주제(채널·요일·앞으로 등), good/warn 은 좋은 소식·챙길 일 표시. */
+export interface Note { tag: string; text: string; tone?: "good" | "warn" }
 
 const DAY = 86_400_000;
 const toDate = (s: string) => new Date(`${s}T00:00:00Z`);
@@ -101,7 +105,7 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
 
   const months = new Map<string, MonthPoint>();
   for (let m = firstMonth; m <= lastMonth; m = addMonths(m, 1)) {
-    months.set(m, { month: m, future: m > thisMonth, revenue: { airbnb: 0, booking: 0, trip: 0 }, nights: 0, occupancy: null });
+    months.set(m, { month: m, future: m > thisMonth, revenue: { airbnb: 0, booking: 0, trip: 0 }, nights: 0, occupancy: null, available: 0 });
   }
   const weekdays = WEEKDAYS.map((label) => ({ label, nights: 0, revenue: 0, occupancy: 0, adr: null as number | null }));
   const channels = new Map(CHANNELS.map((c) => [c, { channel: c, bookings: 0, nights: 0, revenue: 0, commission: 0, adr: null as number | null }]));
@@ -150,6 +154,7 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
     const monthEnd = toDate(`${addMonths(mp.month, 1)}-01`);
     const from = opened ? maxDate(monthStart, opened) : monthStart;
     const days = Math.round((monthEnd.getTime() - from.getTime()) / DAY);
+    mp.available = Math.max(0, days) * roomCount;
     mp.occupancy = days > 0 ? mp.nights / (days * roomCount) : null;
   }
   past.occupancy = past.days > 0 ? past.nights / (past.days * roomCount) : 0;
@@ -180,7 +185,11 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
   }, pastStays, value);
 
   const chList = [...channels.values()];
-  return { months: [...months.values()], past, channels: chList, weekdays, lead, stay, party, notes: notesFor(chList, weekdays, lead, stay, [...months.values()]) };
+  const monthList = [...months.values()];
+  const notes = notesFor(chList, weekdays, lead, stay, monthList, thisMonth, roomCount);
+  // 앞으로 30일: 기간 끝이 오늘 이후일 때만 (지난 기간만 볼 때는 의미 없다)
+  if (toD > todayD) notes.push(...aheadNotes(rows, today, roomCount));
+  return { months: monthList, past, channels: chList, weekdays, lead, stay, party, notes };
 }
 
 const won = (n: number) => `${Math.round(n).toLocaleString("ko-KR")}원`;
@@ -188,35 +197,118 @@ const LABEL: Record<Channel, string> = { airbnb: "에어비앤비", booking: "�
 const SUBJECT: Record<Channel, string> = { airbnb: "에어비앤비가", booking: "부킹닷컴이", trip: "트립닷컴이" };
 
 // 숫자에서 바로 읽히는 한 줄 요약. 근거가 약하면(표본이 적으면) 말하지 않는다.
-function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"], lead: Bucket[], stay: Bucket[], months: MonthPoint[]): string[] {
-  const notes: string[] = [];
+function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"], lead: Bucket[], stay: Bucket[], months: MonthPoint[], thisMonth: string, roomCount: number): Note[] {
+  const notes: Note[] = [];
+  const pct = (a: number, b: number) => Math.round((a / b - 1) * 100);
+
+  // 추세: 지난 3개월과 그 전 3개월 정산액 (이번 달·오픈 전 달 제외)
+  // 오픈한 달처럼 며칠만 영업한 달은 비교에서 뺀다 (팔 수 있던 밤이 28밤 미만).
+  const done = months.filter((m) => m.month < thisMonth && m.occupancy !== null && m.available >= 28 * roomCount);
+  const total = (m: MonthPoint) => CHANNELS.reduce((a, c) => a + m.revenue[c], 0);
+  if (done.length >= 6) {
+    const recent = done.slice(-3).reduce((a, m) => a + total(m), 0);
+    const before = done.slice(-6, -3).reduce((a, m) => a + total(m), 0);
+    if (before > 0) {
+      const d = pct(recent, before);
+      notes.push({ tag: "추세", tone: d >= 0 ? "good" : "warn", text: `최근 3개월 정산액은 ${won(recent)}으로, 그 전 3개월보다 ${d >= 0 ? `${d}% 늘었어요` : `${-d}% 줄었어요`}.` });
+    }
+  }
+  if (done.length >= 3) {
+    const best = [...done].sort((a, b) => total(b) - total(a))[0];
+    const worst = [...done].sort((a, b) => total(a) - total(b))[0];
+    notes.push({ tag: "최고의 달", text: `${monthName(best.month)}이 ${won(total(best))}(가동률 ${Math.round((best.occupancy ?? 0) * 100)}%)로 가장 좋았고, ${monthName(worst.month)}이 ${won(total(worst))}로 가장 낮았어요.` });
+  }
+
   const ranked = channels.filter((c) => c.adr !== null && c.nights >= 5).sort((a, b) => b.adr! - a.adr!);
   if (ranked.length >= 2) {
     const [hi, lo] = [ranked[0], ranked[ranked.length - 1]];
-    notes.push(`박당 정산액은 ${SUBJECT[hi.channel]} ${won(hi.adr!)}으로 가장 높고, ${LABEL[lo.channel]}(${won(lo.adr!)})보다 ${Math.round((hi.adr! / lo.adr! - 1) * 100)}% 많아요.`);
+    notes.push({ tag: "채널", text: `박당 정산액은 ${SUBJECT[hi.channel]} ${won(hi.adr!)}으로 가장 높고, ${LABEL[lo.channel]}(${won(lo.adr!)})보다 ${pct(hi.adr!, lo.adr!)}% 많아요.` });
   }
+  const feeTotal = channels.reduce((a, c) => a + c.commission, 0);
+  const revTotal = channels.reduce((a, c) => a + c.revenue, 0);
+  if (feeTotal > 0 && revTotal > 0) {
+    const rated = channels.filter((c) => c.commission > 0 && c.nights >= 5).map((c) => ({ ...c, rate: c.commission / (c.revenue + c.commission) }));
+    const top = rated.sort((a, b) => b.rate - a.rate)[0];
+    notes.push({ tag: "수수료", text: `이 기간 수수료로 ${won(feeTotal)}이 나갔어요 (손님 결제액의 ${Math.round((feeTotal / (revTotal + feeTotal)) * 100)}%).${top ? ` 수수료 비중은 ${SUBJECT[top.channel]} ${Math.round(top.rate * 100)}%로 가장 커요.` : ""}` });
+  }
+
+  const sum = (ws: typeof weekdays, k: "revenue" | "nights") => ws.reduce((a, w) => a + w[k], 0);
   const weekend = weekdays.filter((_, i) => i === 5 || i === 6);
-  const weekday = weekdays.filter((_, i) => i >= 0 && i <= 4);
-  const avg = (ws: typeof weekdays, k: "revenue" | "nights") => ws.reduce((a, w) => a + w[k], 0);
-  if (avg(weekend, "nights") >= 5 && avg(weekday, "nights") >= 5) {
-    const we = avg(weekend, "revenue") / avg(weekend, "nights");
-    const wd = avg(weekday, "revenue") / avg(weekday, "nights");
-    const diff = Math.round((we / wd - 1) * 100);
-    notes.push(`금·토요일 밤은 박당 ${won(we)}, 일~목요일 밤은 ${won(wd)}이에요 (${diff >= 0 ? `주말이 ${diff}% 높음` : `주말이 ${-diff}% 낮음`}).`);
+  const weekday = weekdays.filter((_, i) => i <= 4);
+  if (sum(weekend, "nights") >= 5 && sum(weekday, "nights") >= 5) {
+    const we = sum(weekend, "revenue") / sum(weekend, "nights");
+    const wd = sum(weekday, "revenue") / sum(weekday, "nights");
+    const d = pct(we, wd);
+    notes.push({ tag: "요일", text: `금·토요일 밤은 박당 ${won(we)}, 일~목요일 밤은 ${won(wd)}이에요 (${d >= 0 ? `주말이 ${d}% 높음` : `주말이 ${-d}% 낮음`}).` });
   }
+  const filled = weekdays.filter((w) => w.nights > 0 || w.occupancy > 0);
+  if (filled.length === 7 && sum(weekdays, "nights") >= 20) {
+    const lo = [...weekdays].sort((a, b) => a.occupancy - b.occupancy)[0];
+    const hi = [...weekdays].sort((a, b) => b.occupancy - a.occupancy)[0];
+    if (hi.occupancy - lo.occupancy >= 0.15) {
+      notes.push({ tag: "요일", tone: "warn", text: `${lo.label}요일 밤이 가장 비어요 (가동률 ${Math.round(lo.occupancy * 100)}%, ${hi.label}요일은 ${Math.round(hi.occupancy * 100)}%). ${lo.label}요일만 요금을 조금 낮춰 볼 만해요.` });
+    }
+  }
+
   const leadTotal = lead.reduce((a, b) => a + b.count, 0);
   if (leadTotal >= 10) {
-    const late = lead[0].count + lead[1].count;
-    notes.push(`예약의 ${Math.round((late / leadTotal) * 100)}%가 체크인 7일 이내에 들어왔어요.`);
+    const late = lead.slice(0, 2);
+    const early = lead.slice(2);
+    const lateCount = late.reduce((a, b) => a + b.count, 0);
+    notes.push({ tag: "예약 시점", text: `예약의 ${Math.round((lateCount / leadTotal) * 100)}%가 체크인 7일 이내에 들어왔어요.` });
+    const adr = (bs: Bucket[]) => { const n = bs.reduce((a, b) => a + b.nights, 0); return n >= 5 ? bs.reduce((a, b) => a + b.revenue, 0) / n : null; };
+    const la = adr(late);
+    const ea = adr(early);
+    if (la && ea && Math.abs(pct(la, ea)) >= 5) {
+      const d = pct(la, ea);
+      notes.push({ tag: "예약 시점", text: `임박 예약(7일 이내)은 박당 ${won(la)}으로, 미리 한 예약(${won(ea)})보다 ${d > 0 ? `${d}% 비싸게` : `${-d}% 싸게`} 팔렸어요.` });
+    }
   }
   const stayTotal = stay.reduce((a, b) => a + b.count, 0);
   if (stayTotal >= 10) {
     const top = [...stay].sort((a, b) => b.count - a.count)[0];
-    notes.push(`가장 흔한 숙박 길이는 ${top.label}이에요 (${Math.round((top.count / stayTotal) * 100)}%).`);
+    const nights = stay.reduce((a, b) => a + b.nights, 0);
+    notes.push({ tag: "숙박 길이", text: `가장 흔한 숙박 길이는 ${top.label}이에요 (${Math.round((top.count / stayTotal) * 100)}%). 평균은 ${(nights / stayTotal).toFixed(1)}박이에요.` });
   }
   const ahead = months.filter((m) => m.future);
   if (ahead.length) {
-    notes.push(`앞으로: ${ahead.map((m) => `${Number(m.month.slice(5))}월 ${Math.round((m.occupancy ?? 0) * 100)}%`).join(", ")} 예약이 차 있어요.`);
+    notes.push({ tag: "앞으로", text: `${ahead.map((m) => `${Number(m.month.slice(5))}월 ${Math.round((m.occupancy ?? 0) * 100)}%`).join(", ")} 예약이 차 있어요.` });
+  }
+  return notes;
+}
+
+const monthName = (m: string) => `${Number(m.slice(5))}월`;
+const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
+
+/** 오늘부터 30일: 빈 밤, 비어 있는 금·토요일, 앞뒤가 막힌 1박짜리 빈 날. */
+export function aheadNotes(rows: StayRow[], today: string, roomCount: number): Note[] {
+  const taken = new Map<string, number>();
+  for (const r of rows) {
+    for (let t = toDate(r.check_in).getTime(); t < toDate(r.check_out).getTime(); t += DAY) {
+      const d = iso(new Date(t));
+      taken.set(d, (taken.get(d) ?? 0) + 1);
+    }
+  }
+  const days = Array.from({ length: 30 }, (_, i) => iso(new Date(toDate(today).getTime() + i * DAY)));
+  const free = days.filter((d) => (taken.get(d) ?? 0) < roomCount);
+  const notes: Note[] = [];
+  notes.push({
+    tag: "다음 30일",
+    tone: free.length > 15 ? "warn" : "good",
+    text: free.length === 0 ? "다음 30일은 모두 예약됐어요." : `다음 30일 중 ${30 - free.length}밤이 찼고 ${free.length}밤이 비어 있어요 (가동률 ${Math.round(((30 - free.length) / 30) * 100)}%).`,
+  });
+  const weekendFree = free.filter((d) => [5, 6].includes(toDate(d).getUTCDay()));
+  if (weekendFree.length) {
+    notes.push({ tag: "빈 주말", tone: "warn", text: `아직 빈 금·토요일 밤: ${weekendFree.slice(0, 6).map(md).join(", ")}${weekendFree.length > 6 ? ` 외 ${weekendFree.length - 6}밤` : ""}.` });
+  }
+  // 앞뒤 밤이 모두 차 있는 1박 빈 날은 최소 숙박 조건 때문에 안 팔리기 쉽다.
+  const isTaken = (d: string) => (taken.get(d) ?? 0) >= roomCount;
+  const orphan = free.filter((d) => {
+    const t = toDate(d).getTime();
+    return d > today && isTaken(iso(new Date(t - DAY))) && isTaken(iso(new Date(t + DAY)));
+  });
+  if (orphan.length) {
+    notes.push({ tag: "끼인 하루", tone: "warn", text: `예약 사이에 끼인 1박: ${orphan.map(md).join(", ")}. 최소 숙박일이 2박 이상이면 이 날은 팔리지 않으니 1박 허용이나 할인을 고려해 보세요.` });
   }
   return notes;
 }

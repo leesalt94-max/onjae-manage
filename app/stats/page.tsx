@@ -80,6 +80,10 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
     muted: m.future,
     title: m.occupancy === null ? `${m.month} 오픈 전` : `${m.month} 가동률 ${pctOf(m.occupancy)} (${m.nights}박)${m.future ? " · 예약된 것만" : ""}`,
   }));
+  const pastMonths = ins.months.filter((m) => !m.future);
+  const pastTotal = pastMonths.reduce((a, m) => a + CHANNELS.reduce((b, c) => b + m.revenue[c], 0), 0);
+  const pastNights = pastMonths.reduce((a, m) => a + m.nights, 0);
+  const monthText = (m: string) => `${m.slice(2, 4)}년 ${Number(m.slice(5))}월`;
   const leadTotal = ins.lead.reduce((a, b) => a + b.count, 0);
   const stayTotal = ins.stay.reduce((a, b) => a + b.count, 0);
   const partyTotal = ins.party.reduce((a, b) => a + b.count, 0);
@@ -109,8 +113,15 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
 
       {ins.notes.length > 0 && (
         <div className="panel insights">
-          <strong>한눈에 보기</strong>
-          <ul>{ins.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+          <h2 style={{ marginTop: 0 }}>한눈에 보기</h2>
+          <ul>
+            {ins.notes.map((n) => (
+              <li key={n.text} className={n.tone}>
+                <span className="note-tag">{n.tag}</span>
+                <span>{n.text}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -127,12 +138,52 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
         <Legend series={SERIES} />
         <Columns points={revenuePoints} series={SERIES} format={short} />
         <p className="muted small">숙박한 밤 기준으로 나눠 담았어요. 흐린 막대는 앞으로의 달(지금까지 들어온 예약만)이에요.</p>
+        <table className="month-table">
+          <thead><tr><th>월</th>{SERIES.map((s) => <th key={s.key} className="num wide-only">{s.label}</th>)}<th className="num">정산액</th><th className="num">숙박</th><th className="num">박당</th></tr></thead>
+          <tbody>
+            {ins.months.map((m) => {
+              const total = CHANNELS.reduce((a, c) => a + m.revenue[c], 0);
+              return (
+                <tr key={m.month} className={m.future ? "muted" : undefined}>
+                  <td>{monthText(m.month)}{m.future ? <span className="small"> 예약분</span> : null}</td>
+                  {CHANNELS.map((c) => <td key={c} className="num wide-only">{won(m.revenue[c])}</td>)}
+                  <td className="num"><strong>{won(total)}</strong></td>
+                  <td className="num">{m.nights}박</td>
+                  <td className="num">{m.nights ? won(total / m.nights) : "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>합계</td>
+              {CHANNELS.map((c) => <td key={c} className="num wide-only">{won(ins.months.filter((m) => !m.future).reduce((a, m) => a + m.revenue[c], 0))}</td>)}
+              <td className="num"><strong>{won(pastTotal)}</strong></td>
+              <td className="num">{pastNights}박</td>
+              <td className="num">{pastNights ? won(pastTotal / pastNights) : "-"}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <p className="muted small">합계는 앞으로의 달(예약분)을 뺀 금액이에요.</p>
       </div>
 
       <h2>월별 가동률</h2>
       <div className="panel">
         <Columns points={occPoints} series={[{ key: "occ", label: "가동률", color: "var(--series-1)" }]} format={pctOf} refLine={1} />
         <p className="muted small">객실 {roomCount}개 기준, 오픈 전 날은 빼고 계산해요. 100%를 넘는 달은 겹친 예약(오버부킹)이 있었다는 뜻이에요.</p>
+        <table className="month-table">
+          <thead><tr><th>월</th><th className="num">가동률</th><th className="num">묵은 밤</th><th className="num">빈 밤</th></tr></thead>
+          <tbody>
+            {ins.months.map((m) => (
+              <tr key={m.month} className={m.future ? "muted" : undefined}>
+                <td>{monthText(m.month)}{m.future ? <span className="small"> 예약분</span> : null}</td>
+                <td className="num"><strong>{m.occupancy === null ? "-" : pctOf(m.occupancy)}</strong></td>
+                <td className="num">{m.nights} / {m.available}</td>
+                <td className="num">{m.available ? Math.max(0, m.available - m.nights) : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <h2>채널</h2>
@@ -221,29 +272,6 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
         </div>
       </div>
 
-      <details className="panel">
-        <summary>월별 숫자 표로 보기</summary>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>월</th><th className="num">가동률</th><th className="num">숙박</th>{SERIES.map((s) => <th key={s.key} className="num wide-only">{s.label}</th>)}<th className="num">합계</th><th className="num">박당</th></tr></thead>
-            <tbody>
-              {[...ins.months].reverse().map((m) => {
-                const total = CHANNELS.reduce((a, c) => a + m.revenue[c], 0);
-                return (
-                  <tr key={m.month} className={m.future ? "muted" : undefined}>
-                    <td>{m.month}{m.future ? <span className="small"> 예약분</span> : null}</td>
-                    <td className="num">{m.occupancy === null ? "-" : pctOf(m.occupancy)}</td>
-                    <td className="num">{m.nights}</td>
-                    {CHANNELS.map((c) => <td key={c} className="num wide-only">{won(m.revenue[c])}</td>)}
-                    <td className="num">{won(total)}</td>
-                    <td className="num">{m.nights ? won(total / m.nights) : "-"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </details>
     </OwnerShell>
   );
 }

@@ -44,7 +44,8 @@ export function Columns({
           <div key={p.key} className={`col${p.muted ? " muted-col" : ""}`} title={p.title}>
             <div className="col-stack" style={{ height: `${(totals[i] / max) * 100}%` }}>
               {series.map((s) => (p.values[s.key] ?? 0) > 0 && (
-                <div key={s.key} style={{ flexGrow: p.values[s.key], background: s.color }} />
+                // flex-grow 합이 1보다 작으면 막대를 다 채우지 못해서(가동률 0.83 등) 비율로 바꿔 넣는다.
+                <div key={s.key} style={{ flex: `${p.values[s.key] / totals[i]} 1 0`, background: s.color }} />
               ))}
             </div>
             <span className={`col-label${p.minor ? " minor" : ""}`}>{p.label}</span>
@@ -83,7 +84,7 @@ export function ShareBar({ parts }: { parts: { key: string; label: string; value
     <>
       <div className="share">
         {parts.filter((p) => p.value > 0).map((p) => (
-          <div key={p.key} style={{ flexGrow: p.value, background: p.color }} title={`${p.label} ${Math.round((p.value / total) * 100)}%`} />
+          <div key={p.key} style={{ flex: `${p.value / total} 1 0`, background: p.color }} title={`${p.label} ${Math.round((p.value / total) * 100)}%`} />
         ))}
       </div>
       <div className="legend">
