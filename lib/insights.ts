@@ -237,8 +237,12 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
   const rates = weekdayWeekendRates(stays, basis);
   if (rates) {
     const level = Math.round((rates.guest.weekday / basis.weekday) * 100);
-    notes.push({ tag: "평일·주말 요금", text: `1박 평균 요금은 평일(일~목) ${won(rates.guest.weekday)}, 주말(금·토) ${won(rates.guest.weekend)}이에요 (손님 결제 기준, 청소비 ${won(basis.cleaning)} 제외). 사장님 수령액으로는 평일 ${won(rates.host.weekday)}, 주말 ${won(rates.host.weekend)}이에요.` });
-    notes.push({ tag: "평일·주말 요금", tone: level < 90 ? "warn" : undefined, text: `정한 요금(평일 ${won(basis.weekday)}, 주말 ${won(basis.weekend)})의 ${level}% 수준으로 팔렸어요 (할인·프로모션 반영). 예약 ${rates.stays}건, 평일 ${rates.weekdayNights}밤·주말 ${rates.weekendNights}밤 기준이에요.` });
+    const split = (x: { all: number; weekday: number; weekend: number }) => `${won(x.all)} (평일 ${won(x.weekday)} · 주말 ${won(x.weekend)})`;
+    notes.push({
+      tag: "1박 객단가",
+      tone: level < 90 ? "warn" : undefined,
+      text: `손님 결제 기준 ${split(rates.guest)}, 사장님 수령 기준 ${split(rates.host)}이에요. 청소비는 빼고, 정한 요금의 ${level}% 수준으로 팔렸어요.`,
+    });
   }
   const filled = weekdays.filter((w) => w.nights > 0 || w.occupancy > 0);
   if (filled.length === 7 && sum(weekdays, "nights") >= 20) {
@@ -373,8 +377,8 @@ export function weekdayWeekendRates(rows: StayRow[], basis: RateBasis) {
   }
   if (sum.stays < 5 || sum.wd === 0 || sum.we === 0) return null;
   return {
-    guest: { weekday: sum.gWd / sum.wd, weekend: sum.gWe / sum.we },
-    host: { weekday: sum.hWd / sum.wd, weekend: sum.hWe / sum.we },
+    guest: { all: (sum.gWd + sum.gWe) / (sum.wd + sum.we), weekday: sum.gWd / sum.wd, weekend: sum.gWe / sum.we },
+    host: { all: (sum.hWd + sum.hWe) / (sum.wd + sum.we), weekday: sum.hWd / sum.wd, weekend: sum.hWe / sum.we },
     stays: sum.stays, weekdayNights: sum.wd, weekendNights: sum.we,
   };
 }
