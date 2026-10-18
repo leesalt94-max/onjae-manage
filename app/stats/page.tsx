@@ -225,16 +225,16 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
         <summary>월별 숫자 표로 보기</summary>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>월</th><th className="num">가동률</th><th className="num">숙박</th>{SERIES.map((s) => <th key={s.key} className="num">{s.label}</th>)}<th className="num">합계</th><th className="num">박당</th></tr></thead>
+            <thead><tr><th>월</th><th className="num">가동률</th><th className="num">숙박</th>{SERIES.map((s) => <th key={s.key} className="num wide-only">{s.label}</th>)}<th className="num">합계</th><th className="num">박당</th></tr></thead>
             <tbody>
               {[...ins.months].reverse().map((m) => {
                 const total = CHANNELS.reduce((a, c) => a + m.revenue[c], 0);
                 return (
                   <tr key={m.month} className={m.future ? "muted" : undefined}>
-                    <td>{m.month}{m.future ? " (예약분)" : ""}</td>
+                    <td>{m.month}{m.future ? <span className="small"> 예약분</span> : null}</td>
                     <td className="num">{m.occupancy === null ? "-" : pctOf(m.occupancy)}</td>
                     <td className="num">{m.nights}</td>
-                    {CHANNELS.map((c) => <td key={c} className="num">{won(m.revenue[c])}</td>)}
+                    {CHANNELS.map((c) => <td key={c} className="num wide-only">{won(m.revenue[c])}</td>)}
                     <td className="num">{won(total)}</td>
                     <td className="num">{m.nights ? won(total / m.nights) : "-"}</td>
                   </tr>

@@ -45,6 +45,8 @@ header.top {
 header.top strong { margin-right: 8px; }
 header.top nav { display: flex; flex-wrap: wrap; gap: 12px; }
 header.top nav a { text-decoration: none; color: var(--text); }
+header.top nav a.on { color: var(--accent); font-weight: 600; }
+header.top .logout { margin-left: auto; }
 main { max-width: 1080px; margin: 0 auto; padding: 16px; }
 h1 { font-size: 22px; margin: 8px 0 16px; }
 h2 { font-size: 17px; margin: 24px 0 8px; }
@@ -121,12 +123,19 @@ tr.muted td { color: var(--muted); }
 .card .top { display: flex; justify-content: space-between; gap: 8px; }
 @media (max-width: 640px) {
   main { padding: 12px; }
-  header.top { padding: 10px 12px; }
-  header.top nav { gap: 10px; font-size: 14px; }
+  /* 휴대폰 메뉴: 손가락으로 누르기 쉬운 3칸 x 2줄 버튼 */
+  header.top { padding: 10px 12px; gap: 8px; }
+  header.top strong { font-size: 17px; }
+  header.top .logout button { padding: 6px 10px; font-size: 14px; }
+  header.top nav { order: 3; width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  header.top nav a { font-size: 16px; text-align: center; padding: 10px 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  header.top nav a.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .kpi .value { font-size: 18px; }
   .grid { grid-template-columns: repeat(2, 1fr); }
   .grid.two { grid-template-columns: 1fr; }
   .wide-only { display: none; }
+  th, td { padding: 7px 5px; }
+  table { font-size: 13px; }
   .cards { display: block; }
   .cols-axis { width: 32px; }
   .col-label.minor { display: none; }
@@ -149,3 +158,5 @@ details.calc sup { color: var(--muted); }
 .calc-inline td { white-space: normal; }
 /* 계산 과정 상자가 표 밖으로 펼쳐지도록 (가로 스크롤 대신) */
 .table-wrap.calc-host { overflow: visible; }
+a.card-link { color: var(--text); text-decoration: none; }
+a.card-link .link { color: var(--accent); }

@@ -35,7 +35,7 @@ export default async function ReservationGuestsPage({
 
   return (
     <OwnerShell>
-      <p><a href="/reservations">← 예약 목록</a></p>
+      <p className="row"><a href="/">← 홈으로</a><a href="/reservations" className="small">예약 목록</a></p>
       <h1>투숙객 정보</h1>
       <Flash params={query} />
       <div className="panel">
@@ -87,7 +87,7 @@ export default async function ReservationGuestsPage({
         })}
         {rows < MAX_GUESTS && <a href={`?rows=${rows + 1}`}>+ 한 명 추가</a>}
         <p className="muted" style={{ margin: 0 }}>나라는 일본·중국·대만 말고 다른 아시아 나라면 "아시아(기타)"로 골라 주세요. 모르는 칸은 "모름"이나 빈칸으로 두세요. 성별·나이대가 둘 다 빈 줄은 저장되지 않고, 전부 비우면 이 예약은 미입력으로 남습니다.</p>
-        <button type="submit">저장</button>
+        <button type="submit">저장하고 홈으로</button>
       </form>
     </OwnerShell>
   );

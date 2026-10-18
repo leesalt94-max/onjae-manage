@@ -130,7 +130,8 @@ export async function saveGuestsAction(formData: FormData) {
   const region = regionFromForm(String(formData.get("region") ?? ""));
   const saved = await saveGuestProfiles(db(), reservationId, guests, region);
   if (!saved) back("/reservations", "예약을 찾지 못했습니다.", "error");
-  back(`/reservations/${reservationId}`, guests.length || region ? `저장했습니다 (${guests.length}명${region ? `, ${REGION_LABELS[region]}` : ""}).` : "입력을 비웠습니다.");
+  // 저장하면 홈으로 돌아간다 (사장님 요청 2026-10-18).
+  back("/", guests.length || region ? `저장했습니다 (${guests.length}명${region ? `, ${REGION_LABELS[region]}` : ""}).` : "입력을 비웠습니다.");
 }
 
 // 사장님 컴퓨터 수집 프로그램용 연결 코드. 화면에 한 번만 보여 준다.
