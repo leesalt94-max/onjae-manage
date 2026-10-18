@@ -15,7 +15,9 @@ import { trip } from "./platforms/trip";
 // 아이디·비밀번호는 다루지 않고, 로그인 상태는 이 컴퓨터의 브라우저 프로필에만 남는다.
 
 const ADAPTERS: Record<Channel, PlatformAdapter> = { trip, airbnb, booking };
-const ORDER: Channel[] = ["trip", "airbnb", "booking"];
+// 부킹닷컴은 사장님 계정 로그인이 막혀 있어 당분간 빼 둔다 (2026-10-18 사장님 결정).
+// 다시 하려면 onjae-collector.bat booking 으로 따로 실행한다.
+const ORDER: Channel[] = ["trip", "airbnb"];
 const HOME = path.join(homedir(), ".onjae-collector");
 const CONFIG_PATH = path.join(HOME, "config.json");
 const DEFAULT_APP_URL = "https://onjae-manage.vercel.app";
