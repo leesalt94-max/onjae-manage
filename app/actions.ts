@@ -12,6 +12,7 @@ import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
 import { createPcToken } from "@/lib/pc-token";
+import { setCancelledByOwner } from "@/lib/reservations";
 import { setSetting } from "@/lib/settings";
 import { CHANNELS } from "@/lib/types";
 
@@ -116,6 +117,16 @@ export async function kakaoTestAction() {
   await requireOwner();
   const ok = await sendKakao(db(), "온재 숙소 관리 알림 테스트입니다.");
   back("/settings", ok ? "카카오톡으로 테스트 메시지를 보냈습니다." : "전송하지 못했습니다. 카카오 연결을 확인해 주세요.", ok ? "ok" : "error");
+}
+
+// 플랫폼 파일에 취소가 안 잡힌 예약을 사장님이 직접 취소로 표시하거나 되돌린다.
+export async function setCancelledAction(formData: FormData) {
+  await requireOwner();
+  const id = Number(formData.get("reservationId"));
+  const cancel = formData.get("cancel") === "1";
+  if (!Number.isInteger(id) || id <= 0) back("/reservations", "예약을 찾지 못했습니다.", "error");
+  const ok = await setCancelledByOwner(db(), id, cancel);
+  back(`/reservations/${id}`, ok ? (cancel ? "취소된 예약으로 표시했어요. 수익·가동률에서 빠집니다." : "취소 표시를 되돌렸어요.") : "바꾸지 못했습니다.", ok ? "ok" : "error");
 }
 
 // 사장님이 예약마다 투숙객 성별·나이대를 입력한다. 둘 다 비운 줄은 저장하지 않는다.

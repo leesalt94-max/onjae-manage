@@ -43,7 +43,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
             <div className="panel kpi"><div className="label">정산 예정액</div><div className="value">{money(sum("payout"), cur)}</div></div>
             <div className="panel kpi"><div className="label">게스트 결제액</div><div className="value">{money(sum("guestPaid"), cur)}</div></div>
             <div className="panel kpi"><div className="label">플랫폼 수수료</div><div className="value">{money(sum("commission"), cur)}</div></div>
-            <div className="panel kpi"><div className="label">예약 / 숙박일</div><div className="value">{rows.reduce((a, r) => a + r.bookings, 0)}건 / {rows.reduce((a, r) => a + r.nights, 0)}박</div></div>
+            <div className="panel kpi"><div className="label">예약 / 숙박일 (체크인 기준)</div><div className="value">{rows.reduce((a, r) => a + r.bookings, 0)}건 / {rows.reduce((a, r) => a + r.nights, 0)}박</div></div>
           </div>
         );
       })}

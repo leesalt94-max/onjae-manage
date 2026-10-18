@@ -71,11 +71,11 @@ export async function getReservationGuests(sql: postgres.Sql, reservationId: num
   const [reservation] = await sql<{
     id: number; channel: "airbnb" | "booking" | "trip"; confirmation: string; status: string; listing: string | null;
     check_in: string; check_out: string; nights: number; adults: number | null; children: number | null; infants: number | null;
-    guest_region: Region | null; currency: string; guest_paid: string | null; commission: string | null; payout_amount: string | null;
+    guest_region: Region | null; currency: string; status_by_owner: boolean; guest_paid: string | null; commission: string | null; payout_amount: string | null;
   }[]>`
     SELECT id, channel, confirmation, status, listing, to_char(check_in, 'YYYY-MM-DD') AS check_in,
            to_char(check_out, 'YYYY-MM-DD') AS check_out, nights, adults, children, infants, guest_region,
-           currency, guest_paid, commission, payout_amount
+           currency, guest_paid, commission, payout_amount, status_by_owner
     FROM reservations WHERE id = ${reservationId}`;
   if (!reservation) return null;
   const guests = await sql<{ gender: Gender; age_band: AgeBand }[]>`

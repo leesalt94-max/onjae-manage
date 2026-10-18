@@ -91,8 +91,9 @@ TRIPRATE1,확인함,${day(1)},${day(3)},2,KRW,85000.00,`);
     await upsertReservations(sql, parsed.reservations, "csv_upload");
     const tripRow = async () => (await monthlyByChannel(sql, 1)).find((r) => r.channel === "trip")!;
 
-    expect(await tripRow()).toMatchObject({ payout: 85000, guestPaid: 0, commission: 0 });
-    await setSetting(sql, "trip_commission_pct", "15");
+    // 설정이 없으면 기본값(수수료 15%, 청소비 50,000): 35,000 ÷ 0.85 + 50,000
+    expect((await tripRow()).guestPaid).toBeCloseTo(91176.47, 1);
+    await setSetting(sql, "trip_cleaning_fee", "0");
     expect(await tripRow()).toMatchObject({ payout: 85000, guestPaid: 100000, commission: 15000 });
     // 청소비 30,000 은 수수료 없이 그대로: 객실 입금 55,000 ÷ 0.85 ≈ 64,706 + 30,000
     await setSetting(sql, "trip_cleaning_fee", "30000");
@@ -118,6 +119,21 @@ TRIPRATE1,확인함,${day(1)},${day(3)},2,KRW,85000.00,`);
     expect((await getReservationGuests(sql, id))?.guests).toEqual([]);
     expect((await getReservationGuests(sql, id))?.reservation.guest_region).toBeNull();
     expect(await saveGuestProfiles(sql, 999999, [])).toBe(false);
+  });
+
+  it("사장님이 취소로 표시한 예약은 파일을 다시 올려도 확정으로 돌아가지 않는다", async () => {
+    const { upsertReservations } = await import("../lib/ingest");
+    const { setCancelledByOwner } = await import("../lib/reservations");
+    const base = { channel: "airbnb" as const, confirmation: "HOSTCXL", listing: null, adults: null, children: null, infants: null,
+      bookedAt: null, checkIn: "2026-10-09", checkOut: "2026-10-10", nights: 1, currency: "KRW", grossAmount: null, discountAmount: null,
+      guestPaid: null, commission: 3000, taxes: null, payoutAmount: 100000, cancelledAt: null, raw: {} };
+    await upsertReservations(sql, [{ ...base, status: "confirmed" }], "owner_pc");
+    const [{ id }] = await sql<{ id: number }[]>`SELECT id FROM reservations WHERE confirmation = 'HOSTCXL'`;
+    expect(await setCancelledByOwner(sql, id, true)).toBe(true);
+    await upsertReservations(sql, [{ ...base, status: "confirmed" }], "owner_pc");
+    expect((await sql`SELECT status FROM reservations WHERE id = ${id}`)[0].status).toBe("cancelled");
+    expect(await setCancelledByOwner(sql, id, false)).toBe(true);
+    expect((await sql`SELECT status FROM reservations WHERE id = ${id}`)[0].status).toBe("confirmed");
   });
 
   it("로그인 정보는 암호화되어 저장되고 화면에는 가려진 아이디만 나온다", async () => {

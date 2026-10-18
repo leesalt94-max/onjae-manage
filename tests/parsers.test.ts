@@ -185,4 +185,15 @@ describe("부킹닷컴 결제 서비스 수수료", () => {
     expect(Math.round(reservations[0].payoutAmount!)).toBe(111082);
     expect(reservations[1].payoutAmount).toBe(85000);
   });
+
+  it("에어비앤비 거래 내역: 취소 행이 있거나 합계가 0 이하인 예약은 취소로 본다", () => {
+    const out = parseExport("airbnb", `Date,Type,Confirmation Code,Start date,End date,Nights,Guest,Currency,Amount,Service fee,Gross earnings
+10/01/2026,Reservation,HMKEEP1,10/09/2026,10/10/2026,1,A,KRW,100000,3000,103000
+10/01/2026,Reservation,HMZERO1,10/09/2026,10/10/2026,1,B,KRW,100000,3000,103000
+10/05/2026,Resolution Adjustment,HMZERO1,10/09/2026,10/10/2026,1,B,KRW,-100000,,
+10/01/2026,Reservation,HMCXL01,10/10/2026,10/11/2026,1,C,KRW,90000,2700,92700
+10/06/2026,Cancellation Fee,HMCXL01,10/10/2026,10/11/2026,1,C,KRW,-5000,,`);
+    const status = Object.fromEntries(out.reservations.map((r) => [r.confirmation, r.status]));
+    expect(status).toEqual({ HMKEEP1: null, HMZERO1: "cancelled", HMCXL01: "cancelled" });
+  });
 });

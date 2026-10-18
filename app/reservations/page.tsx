@@ -16,10 +16,11 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
   await requireOwner();
   const params = await searchParams;
   const month = typeof params.month === "string" && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonth();
+  const showCancelled = params.cancelled === "1";
   const channel = CHANNELS.includes(params.channel as Channel) ? (params.channel as Channel) : undefined;
   const range = monthRange(month);
   const [rows, cancelled, trip] = await Promise.all([
-    listReservations(db(), { channel, ...range }), countCancelled(db(), { channel, ...range }), getTripConfig(db()),
+    listReservations(db(), { channel, ...range, cancelled: showCancelled }), countCancelled(db(), { channel, ...range }), getTripConfig(db()),
   ]);
   const amounts = new Map(rows.map((r) => [r.id, computeAmounts(r, trip)]));
   const query = new URLSearchParams({ month, ...(channel ? { channel } : {}) });
@@ -63,7 +64,9 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
       </form>
       <p className="muted">
         {rows.length}건 · {nightsSum}박 · 정산 {money(payoutSum, "KRW")}
-        {cancelled > 0 && ` · 취소 ${cancelled}건은 목록에서 뺐어요`}
+        {showCancelled
+          ? <> · 취소된 예약만 보는 중 <a href={link(month)}>확정 예약 보기</a></>
+          : cancelled > 0 && <> · 취소 {cancelled}건은 목록에서 뺐어요 <a href={`${link(month)}&cancelled=1`}>취소 예약 보기</a></>}
       </p>
       <details className="panel">
         <summary>결제액·수수료는 어떻게 계산하나요? <span className="muted small">(* 표시는 역산한 값, 금액을 누르면 계산 과정이 보여요)</span></summary>

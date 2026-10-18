@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { AGE_BANDS, AGE_LABELS, getReservationGuests, MAX_GUESTS, REGION_LABELS, REGIONS } from "@/lib/guests";
 import { STATUS_LABELS } from "@/lib/reservations";
 import { CHANNEL_LABELS } from "@/lib/types";
-import { saveGuestsAction } from "../../actions";
+import { saveGuestsAction, setCancelledAction } from "../../actions";
 import { Flash, type SearchParams } from "../../flash";
 import { OwnerShell } from "../../nav";
 import { CalcBox } from "../amount";
@@ -88,6 +88,26 @@ export default async function ReservationGuestsPage({
         {rows < MAX_GUESTS && <a href={`?rows=${rows + 1}`}>+ 한 명 추가</a>}
         <p className="muted" style={{ margin: 0 }}>나라는 일본·중국·대만 말고 다른 아시아 나라면 "아시아(기타)"로 골라 주세요. 모르는 칸은 "모름"이나 빈칸으로 두세요. 성별·나이대가 둘 다 빈 줄은 저장되지 않고, 전부 비우면 이 예약은 미입력으로 남습니다.</p>
         <button type="submit">저장하고 홈으로</button>
+      </form>
+
+      <form action={setCancelledAction} className="panel">
+        <input type="hidden" name="reservationId" value={r.id} />
+        <strong>예약 상태</strong>
+        {r.status === "confirmed" || r.status === "completed" ? (
+          <>
+            <p className="muted small">플랫폼에서 취소했는데 여기 확정으로 남아 있다면 취소로 표시해 주세요. 수익·가동률·예약 목록에서 빠지고, 다음에 파일을 올려도 그대로 유지돼요.</p>
+            <input type="hidden" name="cancel" value="1" />
+            <button type="submit" className="secondary">취소된 예약으로 표시</button>
+          </>
+        ) : r.status_by_owner ? (
+          <>
+            <p className="muted small">사장님이 취소로 표시한 예약이에요.</p>
+            <input type="hidden" name="cancel" value="0" />
+            <button type="submit" className="secondary">취소 표시 되돌리기</button>
+          </>
+        ) : (
+          <p className="muted small">플랫폼 파일에서 {STATUS_LABELS[r.status] ?? r.status}로 확인된 예약이에요.</p>
+        )}
       </form>
     </OwnerShell>
   );

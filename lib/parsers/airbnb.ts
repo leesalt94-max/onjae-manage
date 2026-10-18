@@ -50,6 +50,19 @@ export function parseAirbnb(rows: Row[]): ParseResult {
   const skipped: ParseResult["skipped"] = [];
   const reservations: NormalizedReservation[] = [];
   const isTransactions = headerMatches(rows, A.type) && headerMatches(rows, A.amount);
+  // 거래 내역에서 취소 찾기: 같은 예약번호에 취소 유형 행이 있거나, 조정까지 합친 금액이 0 이하면 취소로 본다.
+  const cancelledCodes = new Set<string>();
+  if (isTransactions) {
+    const net = new Map<string, number>();
+    for (const row of rows) {
+      const code = pick(row, A.confirmation);
+      if (!code) continue;
+      const type = (pick(row, A.type) ?? "").toLowerCase();
+      if (type.includes("cancel") || type.includes("취소")) cancelledCodes.add(code);
+      net.set(code, (net.get(code) ?? 0) + (parseAmount(pick(row, A.amount)) ?? 0));
+    }
+    for (const [code, amount] of net) if (amount <= 0) cancelledCodes.add(code);
+  }
 
   rows.forEach((row, i) => {
     if (isTransactions) {
@@ -81,7 +94,7 @@ export function parseAirbnb(rows: Row[]): ParseResult {
       const fee = parseAmount(pick(row, A.serviceFee));
       reservations.push({
         ...common,
-        status: null,
+        status: cancelledCodes.has(b.confirmation) ? "cancelled" : null,
         adults: null,
         children: null,
         infants: null,

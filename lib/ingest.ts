@@ -25,7 +25,8 @@ export async function upsertReservations(
         ${r.payoutAmount}, ${r.cancelledAt}, ${source}, ${sql.json(r.raw)}
       )
       ON CONFLICT (channel, confirmation) DO UPDATE SET
-        status          = COALESCE(${r.status}::text, reservations.status),
+        status          = CASE WHEN reservations.status_by_owner THEN reservations.status
+                               ELSE COALESCE(${r.status}::text, reservations.status) END,
         listing         = COALESCE(EXCLUDED.listing, reservations.listing),
         adults          = COALESCE(EXCLUDED.adults, reservations.adults),
         children        = COALESCE(EXCLUDED.children, reservations.children),

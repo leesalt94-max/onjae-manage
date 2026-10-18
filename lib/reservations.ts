@@ -32,7 +32,17 @@ export async function countCancelled(sql: postgres.Sql, filter: { channel?: Chan
   return row.n;
 }
 
-export async function listReservations(sql: postgres.Sql, filter: { channel?: Channel; from: string; to: string }) {
+// 사장님이 직접 취소로 표시하거나 되돌린다 (플랫폼 파일에 취소가 안 나오는 경우, 예: 에어비앤비 호스트 취소).
+export async function setCancelledByOwner(sql: postgres.Sql, id: number, cancelled: boolean): Promise<boolean> {
+  const rows = cancelled
+    ? await sql`UPDATE reservations SET status = 'cancelled', status_by_owner = true, updated_at = now()
+                WHERE id = ${id} AND status IN ('confirmed', 'completed') RETURNING id`
+    : await sql`UPDATE reservations SET status = 'confirmed', status_by_owner = false, updated_at = now()
+                WHERE id = ${id} AND status_by_owner RETURNING id`;
+  return rows.length > 0;
+}
+
+export async function listReservations(sql: postgres.Sql, filter: { channel?: Channel; from: string; to: string; cancelled?: boolean }) {
   return sql<ReservationRow[]>`
     SELECT r.id, r.channel, r.confirmation, r.status, r.listing,
            to_char(r.check_in, 'YYYY-MM-DD') AS check_in, to_char(r.check_out, 'YYYY-MM-DD') AS check_out,
@@ -42,7 +52,7 @@ export async function listReservations(sql: postgres.Sql, filter: { channel?: Ch
            string_agg(g.age_band, ',' ORDER BY g.id) FILTER (WHERE g.id IS NOT NULL) AS ages
     FROM reservations r LEFT JOIN guest_profiles g ON g.reservation_id = r.id
     WHERE r.check_in >= ${filter.from} AND r.check_in < ${filter.to}
-      AND r.status IN ('confirmed', 'completed')
+      AND r.status ${filter.cancelled ? sql`IN ('cancelled', 'no_show')` : sql`IN ('confirmed', 'completed')`}
       ${filter.channel ? sql`AND r.channel = ${filter.channel}` : sql``}
     GROUP BY r.id
     ORDER BY r.check_in DESC`;
