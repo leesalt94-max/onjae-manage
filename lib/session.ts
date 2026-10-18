@@ -3,6 +3,8 @@ import { jwtVerify, SignJWT } from "jose";
 // proxy.ts 에서도 쓰므로 node 전용 모듈을 들이지 않는다.
 export const SESSION_COOKIE = "onjae_session";
 export const SESSION_HOURS = 12;
+// "이 기기에서 로그인 유지"를 고르면 (휴대폰에서 매번 로그인하지 않도록) 30일.
+export const REMEMBER_HOURS = 30 * 24;
 
 function secret(): Uint8Array {
   const s = process.env.SESSION_SECRET;
@@ -10,11 +12,11 @@ function secret(): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
-export async function createSessionToken(): Promise<string> {
+export async function createSessionToken(hours = SESSION_HOURS): Promise<string> {
   return new SignJWT({ role: "owner" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_HOURS}h`)
+    .setExpirationTime(`${hours}h`)
     .sign(secret());
 }
 

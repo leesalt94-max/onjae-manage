@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { authenticator } from "otplib";
 import { db } from "./db";
 import { requireEnv } from "./env";
-import { createSessionToken, SESSION_COOKIE, SESSION_HOURS, verifySessionToken } from "./session";
+import { createSessionToken, REMEMBER_HOURS, SESSION_COOKIE, SESSION_HOURS, verifySessionToken } from "./session";
 
 const MAX_FAILURES = 5;
 const WINDOW_MINUTES = 15;
@@ -16,7 +16,7 @@ async function clientIp(): Promise<string> {
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
 
-export async function login(password: string, totp: string): Promise<LoginResult> {
+export async function login(password: string, totp: string, remember = false): Promise<LoginResult> {
   const sql = db();
   const ip = await clientIp();
   const [{ failures }] = await sql<{ failures: number }[]>`
@@ -33,12 +33,13 @@ export async function login(password: string, totp: string): Promise<LoginResult
   await sql`INSERT INTO login_attempts (ip, ok) VALUES (${ip}, ${ok})`;
   if (!ok) return { ok: false, error: "비밀번호 또는 인증 코드가 맞지 않습니다." };
 
-  (await cookies()).set(SESSION_COOKIE, await createSessionToken(), {
+  const hours = remember ? REMEMBER_HOURS : SESSION_HOURS;
+  (await cookies()).set(SESSION_COOKIE, await createSessionToken(hours), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: SESSION_HOURS * 3600,
+    maxAge: hours * 3600,
   });
   return { ok: true };
 }

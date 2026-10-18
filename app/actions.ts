@@ -22,7 +22,7 @@ function back(path: string, msg: string, kind: "ok" | "error" = "ok"): never {
 }
 
 export async function loginAction(formData: FormData) {
-  const result = await login(String(formData.get("password") ?? ""), String(formData.get("totp") ?? ""));
+  const result = await login(String(formData.get("password") ?? ""), String(formData.get("totp") ?? ""), formData.get("remember") === "on");
   if (!result.ok) back("/login", result.error, "error");
   redirect("/");
 }

@@ -22,6 +22,15 @@ export interface ReservationRow {
   ages: string | null;
 }
 
+// 취소·노쇼는 목록에서 뺀다 (사장님 결정 2026-10-18: 취소 예약에 정산액이 보여 헷갈림). 개수만 따로 센다.
+export async function countCancelled(sql: postgres.Sql, filter: { channel?: Channel; from: string; to: string }): Promise<number> {
+  const [row] = await sql<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM reservations
+    WHERE status IN ('cancelled', 'no_show') AND check_in >= ${filter.from} AND check_in < ${filter.to}
+      ${filter.channel ? sql`AND channel = ${filter.channel}` : sql``}`;
+  return row.n;
+}
+
 export async function listReservations(sql: postgres.Sql, filter: { channel?: Channel; from: string; to: string }) {
   return sql<ReservationRow[]>`
     SELECT r.id, r.channel, r.confirmation, r.status, r.listing,
@@ -32,6 +41,7 @@ export async function listReservations(sql: postgres.Sql, filter: { channel?: Ch
            string_agg(g.age_band, ',' ORDER BY g.id) FILTER (WHERE g.id IS NOT NULL) AS ages
     FROM reservations r LEFT JOIN guest_profiles g ON g.reservation_id = r.id
     WHERE r.check_in >= ${filter.from} AND r.check_in < ${filter.to}
+      AND r.status IN ('confirmed', 'completed')
       ${filter.channel ? sql`AND r.channel = ${filter.channel}` : sql``}
     GROUP BY r.id
     ORDER BY r.check_in DESC`;

@@ -24,6 +24,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
             <input name="totp" inputMode="numeric" autoComplete="one-time-code" required />
           </label>
         )}
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input type="checkbox" name="remember" style={{ width: "auto" }} />
+          이 기기에서 30일 동안 로그인 유지 (내 휴대폰·PC에서만)
+        </label>
         <button type="submit">로그인</button>
       </form>
     </main>
