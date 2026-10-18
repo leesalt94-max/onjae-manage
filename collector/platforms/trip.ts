@@ -44,10 +44,10 @@ export const trip: PlatformAdapter = {
   async collect(ctx) {
     const { page } = ctx;
     await ensureLoggedIn(ctx);
-    // 2026-10 기준: 로그인 직후 'eBooking Genie' 안내 창이 뜨고, 왼쪽 메뉴 이름은 Reservations.
+    // 2026-10 기준: 로그인 직후 'eBooking Genie' 안내 창이 뜨고, 왼쪽 메뉴 이름은 Reservations (한국어 화면은 "예약 관리").
     await dismissPopups(page);
     await ctx.snap?.("home");
-    const orders = await firstVisible(page, byText(page, /^(reservations|orders|order management|订单|예약|주문)$/i), 15_000);
+    const orders = await firstVisible(page, byText(page, /^(reservations|orders|order management|订单|订单管理|예약|예약 관리|주문)$/i), 15_000);
     if (!orders) throw new CollectorError("트립닷컴 주문 메뉴를 찾지 못했습니다.");
     await orders.click();
     await page.waitForLoadState("domcontentloaded");
