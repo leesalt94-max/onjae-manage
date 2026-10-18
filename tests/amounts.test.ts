@@ -8,15 +8,14 @@ describe("예약 금액 역산", () => {
     expect(a).toMatchObject({ guestPaid: 430729, commission: 57109, payout: 373620, estimated: true });
   });
 
-  it("트립닷컴 11/11 예: 223,000 − 회원 특가 25%(호스트) = 판매가 167,250, 특별 할인·리뷰 쿠폰은 트립 부담", () => {
-    const sale = 223_000 - 55_750;
-    const a = computeAmounts({ channel: "trip", guest_paid: null, commission: null, payout_amount: sale * 0.85 + 50_000 });
-    // 입금가 142,162.5 + 50,000 은 원 단위 반올림 때문에 1원 오차가 날 수 있다.
+  it("트립닷컴 11/11 예: 223,000 − 회원 특가 25% − 특별 할인(호스트) = 판매가 152,862, 리뷰 쿠폰만 트립 부담", () => {
+    const sale = 223_000 - 55_750 - 14_388;
+    const a = computeAmounts({ channel: "trip", guest_paid: null, commission: null, payout_amount: Math.round(sale * 0.85 + 50_000) });
     expect(Math.abs(a.commission! - sale * 0.15)).toBeLessThanOrEqual(1);
-    expect(Math.abs(a.guestPaid! - 14_388 - 8_700 - 194_162)).toBeLessThanOrEqual(1);
+    expect(Math.abs(a.guestPaid! - 8_700 - 194_162)).toBeLessThanOrEqual(1);
   });
 
-  it("트립닷컴 10/14 예: 입금 92,500 → 객실 판매가 50,000, 수수료 7,500, 쿠폰 전 결제액 100,000", () => {
+  it("트립닷컴 10/14 예: 입금 92,500 → 객실 판매가 50,000, 수수료 7,500, 트립 쿠폰 전 결제액 100,000", () => {
     const a = computeAmounts({ channel: "trip", guest_paid: null, commission: null, payout_amount: 92_500 });
     expect(a).toMatchObject({ guestPaid: 100_000, commission: 7_500 });
     expect(a.steps.find((s) => s.label.includes("객실 판매가"))?.value).toBe(50_000);

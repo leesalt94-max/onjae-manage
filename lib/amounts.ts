@@ -6,7 +6,7 @@ import type { Channel } from "./types";
 // - 부킹닷컴: 요금(청소비 포함)에서 수수료 15% + (Booking.com 결제 시) 결제 서비스 수수료 2.5%.
 // - 트립닷컴: 입금가만 줌. 수수료는 객실 요금에만, 청소비는 그대로 들어온다.
 //   객실 판매가 = (입금가 − 청소비) ÷ (1 − 수수료율), 결제액 = 객실 판매가 + 청소비.
-//   호스트가 건 프로모션(회원 특가 등)은 판매가에 이미 반영돼 있다. 트립닷컴이 부담하는 할인(특별 할인, 리뷰 리워드 등)은
+//   호스트가 건 프로모션(회원 특가, 특별 할인)은 판매가에 이미 반영돼 있다. 트립닷컴이 부담하는 쿠폰(리뷰 리워드 등)은
 //   파일에 없어서 실제 손님 결제액은 이보다 적을 수 있지만, 수수료·정산액은 그대로다 (2026-10 사장님 확인: 10/14 입금 92,500 → 판매가 50,000, 손님 95,195).
 
 export interface TripConfig { commissionPct: number; cleaningFee: number }
@@ -83,9 +83,9 @@ export function computeAmounts(r: AmountInput, trip: TripConfig = TRIP_DEFAULTS)
       { label: "= 객실 입금분", value: roomPayout },
       { label: `÷ (1 − 수수료 ${trip.commissionPct}%) = 객실 판매가`, value: Math.round(roomPrice) },
       { label: "+ 청소비", value: cleaning },
-      { label: "= 손님 결제액 (트립 할인 전)", value: gross },
+      { label: "= 손님 결제액 (트립 쿠폰 전)", value: gross },
       { label: "수수료 = 결제액 − 정산액", value: gross - payout },
     ],
-    note: `트립닷컴 파일에는 입금가만 있어서 역산했어요. 수수료 ${trip.commissionPct}%는 객실 요금에만 붙고, 청소비 ${trip.cleaningFee.toLocaleString("ko-KR")}원은 그대로 들어온다고 보고 계산해요 (설정에서 바꿀 수 있어요). 회원 특가처럼 사장님이 건 할인은 이미 반영돼 있어요. 특별 할인·리뷰 리워드 같은 트립닷컴 부담 할인은 파일에 안 나와서 실제 손님 결제액은 그만큼 적을 수 있지만, 수수료와 정산액에는 영향이 없어요.`,
+    note: `트립닷컴 파일에는 입금가만 있어서 역산했어요. 수수료 ${trip.commissionPct}%는 객실 요금에만 붙고, 청소비 ${trip.cleaningFee.toLocaleString("ko-KR")}원은 그대로 들어온다고 보고 계산해요 (설정에서 바꿀 수 있어요). 회원 특가·특별 할인처럼 사장님이 건 할인은 이미 반영돼 있어요. 리뷰 리워드 같은 트립닷컴 부담 쿠폰은 파일에 안 나와서 실제 손님 결제액은 그만큼 적을 수 있지만, 수수료와 정산액에는 영향이 없어요.`,
   };
 }
