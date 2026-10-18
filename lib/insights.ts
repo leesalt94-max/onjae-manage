@@ -239,9 +239,9 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
     const level = Math.round((rates.guest.weekday / basis.weekday) * 100);
     const split = (x: { all: number; weekday: number; weekend: number }) => `${won(x.all)} (평일 ${won(x.weekday)} · 주말 ${won(x.weekend)})`;
     notes.push({
-      tag: "1박 객단가",
+      tag: "1박 객단가 (청소비 제외)",
       tone: level < 90 ? "warn" : undefined,
-      text: `손님 결제 기준 ${split(rates.guest)}, 사장님 수령 기준 ${split(rates.host)}이에요. 청소비는 빼고, 정한 요금의 ${level}% 수준으로 팔렸어요.`,
+      text: `손님 결제 기준 ${split(rates.guest)}, 사장님 수령 기준 ${split(rates.host)}이에요. 정한 요금의 ${level}% 수준으로 팔렸어요.`,
     });
   }
   const filled = weekdays.filter((w) => w.nights > 0 || w.occupancy > 0);
