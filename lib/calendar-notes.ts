@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import type { AgeBand, Gender } from "./guests";
+import { getSetting, setSetting } from "./settings";
 
 // 청소매니저(onjae-calendar)의 날짜별 메모에서 인원·성별만 읽어 예약에 채운다 (사장님 요청 2026-10-18).
 // 메모 글은 저장하지 않는다. 메모 날짜 = 체크인 날짜인 확정 예약 한 건에만, 비어 있는 칸만 채운다.
@@ -94,9 +95,26 @@ export async function importCalendarNotes(sql: postgres.Sql, notes: Record<strin
   return { applied, skipped };
 }
 
-export async function fetchCalendarNotes(): Promise<Record<string, string>> {
-  const res = await fetch(NOTES_URL, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+export async function fetchCalendarNotes(timeoutMs = 15_000): Promise<Record<string, string>> {
+  const res = await fetch(NOTES_URL, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`청소매니저 메모를 가져오지 못했습니다 (HTTP ${res.status}).`);
   const json = (await res.json()) as { notes?: Record<string, string> };
   return json.notes ?? {};
+}
+
+const AUTO_EVERY_MS = 10 * 60_000;
+
+/**
+ * 홈을 열거나 수집 프로그램이 파일을 보낼 때 자동으로 가져온다 (사장님이 버튼을 누르지 않아도 되게, 2026-10-18).
+ * 10분에 한 번만, 실패해도 화면은 그대로 보여 준다.
+ */
+export async function autoImportCalendarNotes(sql: postgres.Sql): Promise<void> {
+  try {
+    const last = Number(await getSetting(sql, "notes_imported_at"));
+    if (Number.isFinite(last) && Date.now() - last < AUTO_EVERY_MS) return;
+    await setSetting(sql, "notes_imported_at", String(Date.now()));
+    await importCalendarNotes(sql, await fetchCalendarNotes(5_000));
+  } catch (e) {
+    console.warn("청소매니저 메모 자동 가져오기 실패", e);
+  }
 }

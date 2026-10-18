@@ -4,6 +4,7 @@ import { currentMonth, money, monthRange } from "@/lib/format";
 import { pendingOtps } from "@/lib/otp";
 import { REGION_LABELS } from "@/lib/guests";
 import { computeAmounts } from "@/lib/amounts";
+import { autoImportCalendarNotes } from "@/lib/calendar-notes";
 import { monthTotals, stayRows } from "@/lib/insights";
 import { getTripConfig, lastSyncs, upcoming } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
@@ -18,6 +19,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   const sql = db();
   const month = currentMonth();
   const { from, to } = monthRange(month);
+  await autoImportCalendarNotes(sql);
   const [stays, trip, next, syncs, otps] = await Promise.all([
     stayRows(sql, from, to),
     getTripConfig(sql),

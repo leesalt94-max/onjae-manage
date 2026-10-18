@@ -41,7 +41,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <div className="panel">
         <p className="muted">
           청소매니저 달력의 날짜별 메모에서 인원(예: 성인 4명, 아이 1명)과 성별(예: 여성 4명, 남2명 여2명)만 읽어, 그날 체크인한 예약에
-          채웁니다. 이미 입력한 예약은 건드리지 않고, 메모 글 자체는 저장하지 않아요. 새 메모를 남긴 뒤 다시 눌러도 됩니다.
+          채웁니다. 비어 있는 칸만 채우고, 메모 글 자체는 저장하지 않아요. 홈을 열 때와 수집 프로그램이 파일을 보낼 때 자동으로 가져오니 보통은 누르지 않아도 돼요. 바로 반영하고 싶을 때 눌러 주세요.
         </p>
         <form action={importCalendarNotesAction}>
           <button type="submit">메모에서 인원·성별 가져오기</button>
