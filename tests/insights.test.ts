@@ -8,6 +8,20 @@ const row = (channel: StayRow["channel"], checkIn: string, checkOut: string, pay
 });
 
 describe("통계 인사이트", () => {
+  it("같은 밤에 겹친 예약은 가동률에서 한 번만 세고 알려 준다", () => {
+    const ins = buildInsights([
+      row("airbnb", "2026-10-02", "2026-10-03", 100_000), // 금
+      row("booking", "2026-10-02", "2026-10-04", 300_000), // 금·토, 금요일이 겹침
+    ], { today: "2026-10-18", from: "2026-10-01", to: "2026-10-08", openedOn: null, roomCount: 1, monthsAhead: 0 });
+    expect(ins.weekdays[5]).toMatchObject({ nights: 2, occupancy: 1 }); // 1을 넘지 않는다
+    expect(ins.past).toMatchObject({ nights: 3, revenue: 400_000 });
+    expect(ins.past.occupancy).toBeCloseTo(2 / 7);
+    expect(ins.months[0].occupied).toBe(2);
+    expect(ins.overlaps).toEqual([{ date: "2026-10-02", channels: ["airbnb", "booking"] }]);
+    expect(ins.notes[0]).toMatchObject({ tag: "겹친 예약" });
+    expect(ins.notes[0].text).toContain("10/2(금) 에어비앤비·부킹닷컴");
+  });
+
   it("정산액을 숙박한 밤에 나눠 월·요일·채널별로 모은다", () => {
     const ins = buildInsights([
       // 9/29(화)~10/2: 3박, 30만원 → 9월 2박 20만, 10월 1박 10만

@@ -32,8 +32,9 @@ export interface MonthPoint {
   month: string; // YYYY-MM
   future: boolean; // 오늘 이후 달 (이미 들어온 예약만 반영)
   revenue: Record<Channel, number>;
-  nights: number;
-  occupancy: number | null; // 0~1+ (오버부킹이면 1을 넘을 수 있다). 오픈 전 달은 null
+  nights: number; // 예약된 밤 합계 (겹친 예약은 따로 센다, 정산액 계산용)
+  occupied: number; // 실제로 찬 밤 (같은 날 겹친 예약은 객실 수까지만)
+  occupancy: number | null; // 0~1, occupied 기준. 오픈 전 달은 null
   available: number; // 그 달 팔 수 있던 밤 (오픈 전 날 제외, 객실 수 곱함)
 }
 
@@ -47,8 +48,12 @@ export interface Insights {
   lead: Bucket[];
   stay: Bucket[];
   party: Bucket[];
+  overlaps: Overlap[];
   notes: Note[];
 }
+
+/** 같은 밤에 객실 수보다 많이 잡힌 예약 (오버부킹이거나 취소가 안 잡힌 예약). */
+export interface Overlap { date: string; channels: Channel[] }
 
 /** 분석 내용 한 줄. tag 는 주제(채널·요일·앞으로 등), good/warn 은 좋은 소식·챙길 일 표시. */
 export interface Note { tag: string; text: string; tone?: "good" | "warn" }
@@ -106,7 +111,7 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
 
   const months = new Map<string, MonthPoint>();
   for (let m = firstMonth; m <= lastMonth; m = addMonths(m, 1)) {
-    months.set(m, { month: m, future: m > thisMonth, revenue: { airbnb: 0, booking: 0, trip: 0 }, nights: 0, occupancy: null, available: 0 });
+    months.set(m, { month: m, future: m > thisMonth, revenue: { airbnb: 0, booking: 0, trip: 0 }, nights: 0, occupied: 0, occupancy: null, available: 0 });
   }
   const weekdays = WEEKDAYS.map((label) => ({ label, nights: 0, revenue: 0, occupancy: 0, adr: null as number | null }));
   const channels = new Map(CHANNELS.map((c) => [c, { channel: c, bookings: 0, nights: 0, revenue: 0, commission: 0, adr: null as number | null }]));
@@ -115,6 +120,8 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
     days: Math.max(0, Math.round((pastEnd.getTime() - pastStart.getTime()) / DAY)),
   };
   const pastStays: StayRow[] = [];
+  // 날짜별로 잡힌 예약 채널. 가동률은 날짜마다 객실 수까지만 센다 (겹친 예약 때문에 100%를 넘지 않게).
+  const byDate = new Map<string, Channel[]>();
 
   for (const r of rows) {
     const nights = Math.max(1, Math.round((toDate(r.check_out).getTime() - toDate(r.check_in).getTime()) / DAY));
@@ -123,6 +130,10 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
     let countedPast = false;
     for (let i = 0; i < nights; i++) {
       const d = new Date(toDate(r.check_in).getTime() + i * DAY);
+      if ((d >= start && d < end) || (d >= pastStart && d < pastEnd)) {
+        const k = iso(d);
+        byDate.set(k, [...(byDate.get(k) ?? []), r.channel]);
+      }
       if (d >= start && d < end) {
         const mp = months.get(iso(d).slice(0, 7));
         if (mp) {
@@ -149,6 +160,22 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
     }
   }
 
+  const occupiedPast = Array(7).fill(0);
+  let occupiedPastTotal = 0;
+  const overlaps: Overlap[] = [];
+  for (const [k, chs] of byDate) {
+    const d = toDate(k);
+    const n = Math.min(chs.length, roomCount);
+    if (chs.length > roomCount) overlaps.push({ date: k, channels: chs });
+    const mp = d >= start && d < end ? months.get(k.slice(0, 7)) : undefined;
+    if (mp && (!opened || d >= opened)) mp.occupied += n;
+    if (d >= pastStart && d < pastEnd) {
+      occupiedPast[d.getUTCDay()] += n;
+      occupiedPastTotal += n;
+    }
+  }
+  overlaps.sort((a, b) => a.date.localeCompare(b.date));
+
   // 월 가동률: 그 달 중 오픈일 이후 날만 분모로. 오픈 전 달은 비워 둔다.
   for (const mp of months.values()) {
     const monthStart = toDate(`${mp.month}-01`);
@@ -156,15 +183,15 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
     const from = opened ? maxDate(monthStart, opened) : monthStart;
     const days = Math.round((monthEnd.getTime() - from.getTime()) / DAY);
     mp.available = Math.max(0, days) * roomCount;
-    mp.occupancy = days > 0 ? mp.nights / (days * roomCount) : null;
+    mp.occupancy = days > 0 ? mp.occupied / (days * roomCount) : null;
   }
-  past.occupancy = past.days > 0 ? past.nights / (past.days * roomCount) : 0;
+  past.occupancy = past.days > 0 ? occupiedPastTotal / (past.days * roomCount) : 0;
   past.adr = past.nights > 0 ? past.revenue / past.nights : null;
   // 요일별 가동률: 그 요일이 기간 안에 몇 번 있었는지로 나눈다.
   const dowCount = Array(7).fill(0);
   for (let t = pastStart.getTime(); t < pastEnd.getTime(); t += DAY) dowCount[new Date(t).getUTCDay()]++;
   weekdays.forEach((w, i) => {
-    w.occupancy = dowCount[i] > 0 ? w.nights / (dowCount[i] * roomCount) : 0;
+    w.occupancy = dowCount[i] > 0 ? occupiedPast[i] / (dowCount[i] * roomCount) : 0;
     w.adr = w.nights > 0 ? w.revenue / w.nights : null;
   });
   for (const c of channels.values()) c.adr = c.nights > 0 ? c.revenue / c.nights : null;
@@ -190,7 +217,13 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
   const notes = notesFor(chList, weekdays, lead, stay, monthList, thisMonth, roomCount, pastStays, opts.rates ?? RATE_DEFAULTS);
   // 앞으로 30일: 기간 끝이 오늘 이후일 때만 (지난 기간만 볼 때는 의미 없다)
   if (toD > todayD) notes.push(...aheadNotes(rows, today, roomCount));
-  return { months: monthList, past, channels: chList, weekdays, lead, stay, party, notes };
+  if (overlaps.length) {
+    const label: Record<Channel, string> = { airbnb: "에어비앤비", booking: "부킹닷컴", trip: "트립닷컴" };
+    const day = (k: string) => `${Number(k.slice(5, 7))}/${Number(k.slice(8))}(${WEEKDAYS[toDate(k).getUTCDay()]})`;
+    const list = overlaps.slice(0, 6).map((o) => `${day(o.date)} ${o.channels.map((c) => label[c]).join("·")}`).join(", ");
+    notes.unshift({ tag: "겹친 예약", tone: "warn", text: `같은 밤에 예약이 겹친 날이 ${overlaps.length}일 있어요: ${list}${overlaps.length > 6 ? " 등" : ""}. 가동률은 하루 한 번만 세고 정산액은 모두 더했어요. 실제로 취소된 예약이면 예약 화면에서 취소로 표시해 주세요.` });
+  }
+  return { months: monthList, past, channels: chList, weekdays, lead, stay, party, overlaps, notes };
 }
 
 const won = (n: number) => `${Math.round(n).toLocaleString("ko-KR")}원`;

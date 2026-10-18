@@ -92,7 +92,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
     minor: i % 2 === 1,
     values: { occ: m.occupancy ?? 0 },
     muted: m.future,
-    title: m.occupancy === null ? `${m.month} 오픈 전` : `${m.month} 가동률 ${pctOf(m.occupancy)} (${m.nights}박)${m.future ? " · 예약된 것만" : ""}`,
+    title: m.occupancy === null ? `${m.month} 오픈 전` : `${m.month} 가동률 ${pctOf(m.occupancy)} (${m.occupied}박)${m.future ? " · 예약된 것만" : ""}`,
   }));
   const pastMonths = ins.months.filter((m) => !m.future);
   const pastTotal = pastMonths.reduce((a, m) => a + CHANNELS.reduce((b, c) => b + m.revenue[c], 0), 0);
@@ -233,7 +233,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
       <h2>월별 가동률</h2>
       <div className="panel">
         <Columns points={occPoints} series={[{ key: "occ", label: "가동률", color: "var(--series-1)" }]} format={pctOf} refLine={1} />
-        <p className="muted small">객실 {roomCount}개 기준, 오픈 전 날은 빼고 계산해요. 100%를 넘는 달은 겹친 예약(오버부킹)이 있었다는 뜻이에요.</p>
+        <p className="muted small">객실 {roomCount}개 기준, 오픈 전 날은 빼고 계산해요. 같은 밤에 예약이 겹친 날은 한 번만 세요.</p>
         <table className="month-table">
           <thead><tr><th>월</th><th className="num">가동률</th><th className="num">묵은 밤</th><th className="num">빈 밤</th></tr></thead>
           <tbody>
@@ -241,8 +241,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
               <tr key={m.month} className={m.future ? "muted" : undefined}>
                 <td>{monthText(m.month)}{m.future ? <span className="small"> 예약분</span> : null}</td>
                 <td className="num"><strong>{m.occupancy === null ? "-" : pctOf(m.occupancy)}</strong></td>
-                <td className="num">{m.nights} / {m.available}</td>
-                <td className="num">{m.available ? Math.max(0, m.available - m.nights) : "-"}</td>
+                <td className="num">{m.occupied} / {m.available}</td>
+                <td className="num">{m.available ? Math.max(0, m.available - m.occupied) : "-"}</td>
               </tr>
             ))}
           </tbody>
