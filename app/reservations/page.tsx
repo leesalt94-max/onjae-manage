@@ -70,7 +70,7 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         <ul className="small">
           <li><b>부킹닷컴</b>: 파일의 요금(청소비 포함)이 결제액이에요. 수수료 15%에, Booking.com이 결제를 대행한 예약은 결제 서비스 수수료 2.5%가 더 빠져요 (총 17.5%).</li>
           <li><b>에어비앤비</b>: 호스트가 수수료를 모두 내는 방식이라 결제액 = 정산액 + 수수료(파일의 Service fee)예요.</li>
-          <li><b>트립닷컴</b>: 파일에 입금가(정산액)만 있어요. 수수료 {trip.commissionPct}%는 객실 요금에만 붙고 청소비 {trip.cleaningFee.toLocaleString("ko-KR")}원은 그대로 들어오므로, 객실 판매가 = (입금가 − 청소비) ÷ (1 − {trip.commissionPct}%), 결제액 = 객실 판매가 + 청소비, 수수료 = 결제액 − 입금가로 계산해요. 회원 특가처럼 사장님이 건 할인은 이미 반영돼 있고, 리뷰 리워드 같은 트립닷컴 부담 쿠폰은 파일에 없어서 실제 손님 결제액은 그만큼 적을 수 있어요 (수수료·정산액에는 영향 없음). 수수료율·청소비는 <a href="/settings">설정</a>에서 바꿀 수 있어요.</li>
+          <li><b>트립닷컴</b>: 파일에 입금가(정산액)만 있어요. 수수료 {trip.commissionPct}%는 객실 요금에만 붙고 청소비 {trip.cleaningFee.toLocaleString("ko-KR")}원은 그대로 들어오므로, 객실 판매가 = (입금가 − 청소비) ÷ (1 − {trip.commissionPct}%), 결제액 = 객실 판매가 + 청소비, 수수료 = 결제액 − 입금가로 계산해요. 회원 특가처럼 사장님이 건 할인은 이미 반영돼 있고, 특별 할인·리뷰 리워드 같은 트립닷컴 부담 할인은 파일에 없어서 실제 손님 결제액은 그만큼 적을 수 있어요 (수수료·정산액에는 영향 없음). 수수료율·청소비는 <a href="/settings">설정</a>에서 바꿀 수 있어요.</li>
         </ul>
       </details>
       {rows.length > 0 && (
