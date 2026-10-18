@@ -6,7 +6,7 @@ import { hasPcToken } from "@/lib/pc-token";
 import { getOpenedOn } from "@/lib/insights";
 import { getRateBasis, getRoomCount, getTripCleaningFee, getTripCommissionPct } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
-import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveOpenedOnAction, saveRateBasisAction, saveRoomCountAction, saveTripCommissionAction, toggleCredentialAction } from "../actions";
+import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveOpenedOnAction, importCalendarNotesAction, saveRateBasisAction, saveRoomCountAction, saveTripCommissionAction, toggleCredentialAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { PcTokenForm } from "./pc-token";
@@ -35,6 +35,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
         <p className="muted small" style={{ margin: "8px 0 0" }}>
           <a href="/otp">인증번호 입력</a> · 플랫폼에 처음 로그인할 때 1회만 필요해요. 필요할 때는 홈에 알림이 떠요.
         </p>
+      </div>
+
+      <h2>청소매니저 메모 가져오기</h2>
+      <div className="panel">
+        <p className="muted">
+          청소매니저 달력의 날짜별 메모에서 인원(예: 성인 4명, 아이 1명)과 성별(예: 여성 4명, 남2명 여2명)만 읽어, 그날 체크인한 예약에
+          채웁니다. 이미 입력한 예약은 건드리지 않고, 메모 글 자체는 저장하지 않아요. 새 메모를 남긴 뒤 다시 눌러도 됩니다.
+        </p>
+        <form action={importCalendarNotesAction}>
+          <button type="submit">메모에서 인원·성별 가져오기</button>
+        </form>
       </div>
 
       <h2>객실 수</h2>

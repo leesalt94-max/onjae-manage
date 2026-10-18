@@ -136,6 +136,26 @@ TRIPRATE1,확인함,${day(1)},${day(3)},2,KRW,85000.00,`);
     expect((await sql`SELECT status FROM reservations WHERE id = ${id}`)[0].status).toBe("confirmed");
   });
 
+  it("청소매니저 메모로 그날 체크인한 예약의 빈 인원·성별만 채운다", async () => {
+    const { upsertReservations } = await import("../lib/ingest");
+    const { importCalendarNotes } = await import("../lib/calendar-notes");
+    const base = { listing: null, adults: null, children: null, infants: null, bookedAt: null, nights: 2, currency: "KRW",
+      grossAmount: null, discountAmount: null, guestPaid: null, commission: null, taxes: null, payoutAmount: 100000, cancelledAt: null, raw: {} };
+    await upsertReservations(sql, [
+      { ...base, channel: "trip", confirmation: "NOTE1", status: "confirmed", checkIn: "2030-03-03", checkOut: "2030-03-05" },
+      { ...base, channel: "airbnb", confirmation: "NOTE2", status: "confirmed", checkIn: "2030-03-10", checkOut: "2030-03-12", adults: 3 },
+    ], "owner_pc");
+    const r = await importCalendarNotes(sql, { "2030-03-03": "여성4명 2박", "2030-03-10": "남2명 여1명", "2030-03-20": "5명", "2030-03-04": "청소만" });
+    expect(r.applied).toEqual(["3/3 4명 · 여4", "3/10 남2 여1"]);
+    expect(r.skipped).toEqual(["3/20 (그날 체크인 예약 없음)"]);
+    const [n1] = await sql`SELECT adults, children, (SELECT count(*)::int FROM guest_profiles WHERE reservation_id = r.id) AS p FROM reservations r WHERE confirmation = 'NOTE1'`;
+    expect(n1).toMatchObject({ adults: 4, children: 0, p: 4 });
+    const [n2] = await sql`SELECT adults FROM reservations WHERE confirmation = 'NOTE2'`;
+    expect(n2.adults).toBe(3); // 플랫폼 인원은 그대로
+    const again = await importCalendarNotes(sql, { "2030-03-03": "여성4명 2박" });
+    expect(again).toEqual({ applied: [], skipped: ["3/3 (이미 입력됨)"] });
+  });
+
   it("로그인 정보는 암호화되어 저장되고 화면에는 가려진 아이디만 나온다", async () => {
     const { saveCredentials, loadEnabledLogins, listCredentialStatus, saveSessionState } = await import("../lib/credentials");
     await saveCredentials(sql, "airbnb", "owner@example.com", "s3cret!");

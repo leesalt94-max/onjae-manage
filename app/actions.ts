@@ -6,6 +6,7 @@ import { login, logout, requireOwner } from "@/lib/auth";
 import { deleteCredentials, saveCredentials, setEnabled } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { importFiles } from "@/lib/import-files";
+import { fetchCalendarNotes, importCalendarNotes } from "@/lib/calendar-notes";
 import { sendKakao } from "@/lib/kakao";
 import { guestsFromForm, MAX_GUESTS, REGION_LABELS, regionFromForm, saveGuestProfiles } from "@/lib/guests";
 import { answerOtp } from "@/lib/otp";
@@ -122,6 +123,22 @@ export async function saveRateBasisAction(formData: FormData) {
   await setSetting(sql, "base_weekday_rate", wd);
   await setSetting(sql, "base_weekend_rate", we);
   back("/settings", `평일 ${wd || "124,000(기본)"}원, 주말 ${we || "175,000(기본)"}원 비율로 분석합니다.`);
+}
+
+// 청소매니저 메모의 인원·성별을 예약에 채운다. 이미 입력한 칸은 건드리지 않아 여러 번 눌러도 된다.
+export async function importCalendarNotesAction() {
+  await requireOwner();
+  let msg: string;
+  try {
+    const result = await importCalendarNotes(db(), await fetchCalendarNotes());
+    msg = result.applied.length
+      ? `청소매니저 메모 ${result.applied.length}건을 반영했어요: ${result.applied.join(", ")}`
+      : "새로 반영할 메모가 없어요.";
+    if (result.skipped.length) msg += ` / 건너뜀: ${result.skipped.join(", ")}`;
+  } catch (e) {
+    back("/settings", e instanceof Error ? e.message : "청소매니저 메모를 가져오지 못했습니다.", "error");
+  }
+  back("/settings", msg);
 }
 
 export async function kakaoTestAction() {
