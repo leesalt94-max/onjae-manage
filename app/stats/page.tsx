@@ -4,6 +4,7 @@ import { money, pct } from "@/lib/format";
 import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
 import { buildInsights, getOpenedOn, stayRows } from "@/lib/insights";
 import { computeAmounts } from "@/lib/amounts";
+import { autoImportCalendarNotes } from "@/lib/calendar-notes";
 import { forecastSales, SALES_THRESHOLD, type YearForecast } from "@/lib/forecast";
 import { ageBands, genderBreakdown, getRateBasis, getRoomCount, getTripConfig, guestCoverage, regionBreakdown, summary } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
@@ -34,6 +35,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
   const sql = db();
   const params = await searchParams;
   const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10); // 한국 날짜
+  await autoImportCalendarNotes(sql);
   const [roomCount, opened] = await Promise.all([getRoomCount(sql), getOpenedOn(sql)]);
 
   // 기간: 기본은 오늘 기준 최근 1년. 빠른 선택(올해·오픈 이후)이나 직접 고른 날짜(끝 날짜 포함).
