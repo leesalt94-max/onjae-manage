@@ -16,6 +16,10 @@ import { trip } from "./platforms/trip";
 // GitHub Actions 에서 3시간마다 실행. 플랫폼마다 따로 돌아서 하나가 실패해도 나머지는 계속한다.
 const ADAPTERS: Record<string, PlatformAdapter> = { airbnb, booking, trip };
 
+// 에어비앤비·부킹닷컴은 GitHub 서버에서 로그인하면 로봇 확인·접속 제한으로 막혀서(2026-10-18 확인),
+// 사장님 결정으로 자동 반복 시도에서 뺐다. 플랫폼을 직접 지정해 실행할 때만 시도한다.
+const AUTO_CHANNELS = new Set(["trip"]);
+
 const DEBUG = process.env.DEBUG_SCREENSHOTS === "1";
 
 async function screenshot(page: Page, name: string) {
@@ -96,7 +100,7 @@ async function main() {
   for (const channel of unreadable) {
     await sendKakao(sql, `[${CHANNEL_LABELS[channel]}] 저장된 로그인 정보를 읽을 수 없어요. 암호화 키가 바뀌었다면 설정에서 다시 저장해 주세요.`, "/settings");
   }
-  const logins = all.filter((l) => !only || l.channel === only);
+  const logins = all.filter((l) => (only ? l.channel === only : AUTO_CHANNELS.has(l.channel)));
   if (logins.length === 0) console.log("자동 수집할 플랫폼 로그인 정보가 없습니다. 사이트 설정에서 먼저 등록하세요.");
   let failed = 0;
   for (const login of logins) if (!(await collectOne(login))) failed++;

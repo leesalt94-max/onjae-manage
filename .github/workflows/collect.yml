@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: "특정 플랫폼만 (airbnb, booking, trip). 비우면 전부"
+        description: "특정 플랫폼만 (airbnb, booking, trip). 비우면 자동 수집 대상(트립닷컴)만"
         required: false
         default: ""
       debug_screenshots:
