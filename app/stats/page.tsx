@@ -4,7 +4,7 @@ import { money, pct } from "@/lib/format";
 import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
 import { buildInsights, getOpenedOn, stayRows } from "@/lib/insights";
 import { computeAmounts } from "@/lib/amounts";
-import { ageBands, genderBreakdown, getRoomCount, getTripConfig, guestCoverage, regionBreakdown, summary } from "@/lib/stats";
+import { ageBands, genderBreakdown, getRateBasis, getRoomCount, getTripConfig, guestCoverage, regionBreakdown, summary } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
 import type { SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
@@ -60,7 +60,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
   for (const r of rows) {
     if (r.commission === null) r.commission = computeAmounts({ channel: r.channel, guest_paid: null, commission: null, payout_amount: r.payout }, trip).commission;
   }
-  const ins = buildInsights(rows, { today, from, to, openedOn: opened.date, roomCount, monthsAhead: MONTHS_AHEAD });
+  const ins = buildInsights(rows, { today, from, to, openedOn: opened.date, roomCount, monthsAhead: MONTHS_AHEAD, rates: await getRateBasis(sql) });
   const occStart = opened.date && opened.date > from ? opened.date : from;
 
   const monthLabel = (m: string, i: number) => (i === 0 || m.endsWith("-01") ? `${m.slice(2, 4)}.${Number(m.slice(5))}` : `${Number(m.slice(5))}`);

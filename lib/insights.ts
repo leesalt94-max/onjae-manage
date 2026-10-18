@@ -82,6 +82,7 @@ export interface InsightOptions {
   openedOn: string | null; // 숙소 오픈일. 이전 날은 가동률 분모에서 뺀다
   roomCount: number;
   monthsAhead: number; // 끝이 오늘 이후면 그래프에 앞으로 몇 달을 더 보여줄지
+  rates?: RateBasis; // 평일·주말 기준 요금과 청소비 (없으면 기본값)
 }
 
 const maxDate = (a: Date, b: Date) => (a > b ? a : b);
@@ -186,7 +187,7 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
 
   const chList = [...channels.values()];
   const monthList = [...months.values()];
-  const notes = notesFor(chList, weekdays, lead, stay, monthList, thisMonth, roomCount, pastStays);
+  const notes = notesFor(chList, weekdays, lead, stay, monthList, thisMonth, roomCount, pastStays, opts.rates ?? RATE_DEFAULTS);
   // 앞으로 30일: 기간 끝이 오늘 이후일 때만 (지난 기간만 볼 때는 의미 없다)
   if (toD > todayD) notes.push(...aheadNotes(rows, today, roomCount));
   return { months: monthList, past, channels: chList, weekdays, lead, stay, party, notes };
@@ -197,7 +198,7 @@ const LABEL: Record<Channel, string> = { airbnb: "에어비앤비", booking: "�
 const SUBJECT: Record<Channel, string> = { airbnb: "에어비앤비가", booking: "부킹닷컴이", trip: "트립닷컴이" };
 
 // 숫자에서 바로 읽히는 한 줄 요약. 근거가 약하면(표본이 적으면) 말하지 않는다.
-function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"], lead: Bucket[], stay: Bucket[], months: MonthPoint[], thisMonth: string, roomCount: number, stays: StayRow[]): Note[] {
+function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"], lead: Bucket[], stay: Bucket[], months: MonthPoint[], thisMonth: string, roomCount: number, stays: StayRow[], basis: RateBasis): Note[] {
   const notes: Note[] = [];
   const pct = (a: number, b: number) => Math.round((a / b - 1) * 100);
 
@@ -233,11 +234,11 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
   }
 
   const sum = (ws: typeof weekdays, k: "revenue" | "nights") => ws.reduce((a, w) => a + w[k], 0);
-  const guest = weekdayWeekendRates(stays, (r) => (r.payout ?? 0) + (r.commission ?? 0));
-  const host = weekdayWeekendRates(stays, (r) => r.payout ?? 0);
-  if (guest && host) {
-    const d = pct(guest.weekend, guest.weekday);
-    notes.push({ tag: "평일·주말 요금", text: `1박 평균 요금은 평일(일~목) ${won(guest.weekday)}, 주말(금·토) ${won(guest.weekend)}이에요 (손님 결제 기준, 청소비 제외${d ? `, 주말이 ${d > 0 ? `${d}% 비쌈` : `${-d}% 쌈`}` : ""}). 사장님 수령액으로는 평일 ${won(host.weekday)}, 주말 ${won(host.weekend)}이에요.` });
+  const rates = weekdayWeekendRates(stays, basis);
+  if (rates) {
+    const level = Math.round((rates.guest.weekday / basis.weekday) * 100);
+    notes.push({ tag: "평일·주말 요금", text: `1박 평균 요금은 평일(일~목) ${won(rates.guest.weekday)}, 주말(금·토) ${won(rates.guest.weekend)}이에요 (손님 결제 기준, 청소비 ${won(basis.cleaning)} 제외). 사장님 수령액으로는 평일 ${won(rates.host.weekday)}, 주말 ${won(rates.host.weekend)}이에요.` });
+    notes.push({ tag: "평일·주말 요금", tone: level < 90 ? "warn" : undefined, text: `정한 요금(평일 ${won(basis.weekday)}, 주말 ${won(basis.weekend)})의 ${level}% 수준으로 팔렸어요 (할인·프로모션 반영). 예약 ${rates.stays}건, 평일 ${rates.weekdayNights}밤·주말 ${rates.weekendNights}밤 기준이에요.` });
   }
   const filled = weekdays.filter((w) => w.nights > 0 || w.occupancy > 0);
   if (filled.length === 7 && sum(weekdays, "nights") >= 20) {
@@ -334,13 +335,17 @@ export function monthTotals(rows: StayRow[], from: string, to: string) {
   return out;
 }
 
+export interface RateBasis { weekday: number; weekend: number; cleaning: number }
+export const RATE_DEFAULTS: RateBasis = { weekday: 124_000, weekend: 175_000, cleaning: 50_000 };
+
 /**
- * 평일(일~목 밤)·주말(금·토 밤) 1박 평균 요금. 예약 금액 = 예약당 고정분(청소비 등) + 평일 박수 × 평일 요금 + 주말 박수 × 주말 요금
- * 으로 보고 모든 예약에 가장 잘 맞는 값을 찾는다(최소제곱). 여러 박 예약도 평일·주말 몫이 섞이지 않게 나눌 수 있다.
+ * 평일(일~목 밤)·주말(금·토 밤) 1박 평균 요금 (사장님 방식, 2026-10-18).
+ * 예약마다 받은 금액에서 청소비를 빼고, 남은 객실 금액을 기준 요금 비율(평일 124,000 : 주말 175,000)로 그 예약의 밤에 나눈다.
+ * 모든 예약의 평일 몫 ÷ 평일 박수, 주말 몫 ÷ 주말 박수가 평균 요금이다.
+ * 손님 결제 기준(정산액 + 수수료)과 사장님 수령 기준(정산액) 두 가지로 낸다.
  */
-export function weekdayWeekendRates(rows: StayRow[], value: (r: StayRow) => number) {
-  const X: number[][] = [];
-  const y: number[] = [];
+export function weekdayWeekendRates(rows: StayRow[], basis: RateBasis) {
+  const sum = { gWd: 0, gWe: 0, hWd: 0, hWe: 0, wd: 0, we: 0, stays: 0 };
   for (const r of rows) {
     if (r.payout === null) continue;
     let wd = 0;
@@ -350,34 +355,28 @@ export function weekdayWeekendRates(rows: StayRow[], value: (r: StayRow) => numb
       if (dow === 5 || dow === 6) we++;
       else wd++;
     }
-    X.push([1, wd, we]);
-    y.push(value(r));
+    const guest = r.payout + (r.commission ?? 0);
+    const guestRoom = guest - basis.cleaning;
+    if (wd + we === 0 || guestRoom <= 0) continue;
+    // 사장님 몫 청소비: 트립닷컴은 수수료 없이 그대로, 나머지는 예약 전체 수수료율만큼 빠진다고 본다.
+    const hostCleaning = r.channel === "trip" ? basis.cleaning : basis.cleaning * (r.payout / guest);
+    const hostRoom = r.payout - hostCleaning;
+    const weight = wd * basis.weekday + we * basis.weekend;
+    const wdShare = (wd * basis.weekday) / weight;
+    sum.gWd += guestRoom * wdShare;
+    sum.gWe += guestRoom * (1 - wdShare);
+    sum.hWd += hostRoom * wdShare;
+    sum.hWe += hostRoom * (1 - wdShare);
+    sum.wd += wd;
+    sum.we += we;
+    sum.stays++;
   }
-  const weekendStays = X.filter((x) => x[2] > 0).length;
-  const weekdayStays = X.filter((x) => x[1] > 0).length;
-  if (X.length < 10 || weekendStays < 3 || weekdayStays < 3) return null;
-  // 정규방정식 (XᵀX)b = Xᵀy 를 풀어 b = [고정분, 평일, 주말]
-  const A = [0, 1, 2].map((i) => [0, 1, 2].map((j) => X.reduce((a, x) => a + x[i] * x[j], 0)));
-  const v = [0, 1, 2].map((i) => X.reduce((a, x, k) => a + x[i] * y[k], 0));
-  const b = solve3(A, v);
-  if (!b || b[1] <= 0 || b[2] <= 0) return null;
-  return { fixed: b[0], weekday: b[1], weekend: b[2], stays: X.length };
-}
-
-function solve3(A: number[][], v: number[]): number[] | null {
-  const m = A.map((row, i) => [...row, v[i]]);
-  for (let c = 0; c < 3; c++) {
-    let p = c;
-    for (let r = c + 1; r < 3; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
-    if (Math.abs(m[p][c]) < 1e-9) return null;
-    [m[c], m[p]] = [m[p], m[c]];
-    for (let r = 0; r < 3; r++) {
-      if (r === c) continue;
-      const f = m[r][c] / m[c][c];
-      for (let k = c; k < 4; k++) m[r][k] -= f * m[c][k];
-    }
-  }
-  return m.map((row, i) => row[3] / row[i]);
+  if (sum.stays < 5 || sum.wd === 0 || sum.we === 0) return null;
+  return {
+    guest: { weekday: sum.gWd / sum.wd, weekend: sum.gWe / sum.we },
+    host: { weekday: sum.hWd / sum.wd, weekend: sum.hWe / sum.we },
+    stays: sum.stays, weekdayNights: sum.wd, weekendNights: sum.we,
+  };
 }
 
 // 숙소 오픈일: 설정값이 없으면 첫 체크인 날짜로 본다.

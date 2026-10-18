@@ -4,9 +4,9 @@ import { db } from "@/lib/db";
 import { isKakaoConnected } from "@/lib/kakao";
 import { hasPcToken } from "@/lib/pc-token";
 import { getOpenedOn } from "@/lib/insights";
-import { getRoomCount, getTripCleaningFee, getTripCommissionPct } from "@/lib/stats";
+import { getRateBasis, getRoomCount, getTripCleaningFee, getTripCommissionPct } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
-import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveOpenedOnAction, saveRoomCountAction, saveTripCommissionAction, toggleCredentialAction } from "../actions";
+import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveOpenedOnAction, saveRateBasisAction, saveRoomCountAction, saveTripCommissionAction, toggleCredentialAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { PcTokenForm } from "./pc-token";
@@ -17,9 +17,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   await requireOwner();
   const params = await searchParams;
   const sql = db();
-  const [creds, kakao, pcToken, roomCount, tripPct, tripCleaning, opened] = await Promise.all([
+  const [creds, kakao, pcToken, roomCount, tripPct, tripCleaning, opened, rates] = await Promise.all([
     listCredentialStatus(sql), isKakaoConnected(sql), hasPcToken(sql), getRoomCount(sql), getTripCommissionPct(sql),
-    getTripCleaningFee(sql), getOpenedOn(sql),
+    getTripCleaningFee(sql), getOpenedOn(sql), getRateBasis(sql),
   ]);
 
   return (
@@ -57,6 +57,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
           <span>%</span>
           <span style={{ marginLeft: 12 }}>예약당 청소비</span>
           <input type="number" name="tripCleaningFee" min={0} step={1000} defaultValue={tripCleaning} placeholder="예: 50000" style={{ width: 120 }} />
+          <span>원</span>
+          <button type="submit">저장</button>
+        </form>
+      </div>
+
+      <h2>평일·주말 기준 요금</h2>
+      <div className="panel">
+        <p className="muted">
+          통계의 평일·주말 1박 요금은 예약마다 받은 금액에서 청소비({rates.cleaning.toLocaleString("ko-KR")}원)를 빼고, 이 두 요금의 비율로 평일 밤과
+          주말(금·토) 밤에 나눠 계산합니다. 에어비앤비에 정해 둔 요금을 넣어 주세요. 비워 두면 평일 124,000원, 주말 175,000원을 씁니다.
+        </p>
+        <form action={saveRateBasisAction} className="row">
+          <span>평일</span>
+          <input type="number" name="weekday" min={1000} step={1000} defaultValue={rates.weekday} style={{ width: 120 }} />
+          <span style={{ marginLeft: 12 }}>주말</span>
+          <input type="number" name="weekend" min={1000} step={1000} defaultValue={rates.weekend} style={{ width: 120 }} />
           <span>원</span>
           <button type="submit">저장</button>
         </form>

@@ -113,6 +113,17 @@ export async function saveTripCommissionAction(formData: FormData) {
   back("/settings", `트립닷컴 수수료율 ${pctRaw || "15(기본)"}%, 청소비 ${feeRaw || "50,000(기본)"}원으로 계산합니다.`);
 }
 
+export async function saveRateBasisAction(formData: FormData) {
+  await requireOwner();
+  const wd = String(formData.get("weekday") ?? "").trim();
+  const we = String(formData.get("weekend") ?? "").trim();
+  for (const v of [wd, we]) if (v !== "" && !(Number(v) > 0)) back("/settings", "요금은 0보다 큰 숫자로 넣어 주세요.", "error");
+  const sql = db();
+  await setSetting(sql, "base_weekday_rate", wd);
+  await setSetting(sql, "base_weekend_rate", we);
+  back("/settings", `평일 ${wd || "124,000(기본)"}원, 주말 ${we || "175,000(기본)"}원 비율로 분석합니다.`);
+}
+
 export async function kakaoTestAction() {
   await requireOwner();
   const ok = await sendKakao(db(), "온재 숙소 관리 알림 테스트입니다.");

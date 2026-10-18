@@ -59,21 +59,19 @@ describe("평일·주말 요금과 이번 달 합계", () => {
   const row = (check_in: string, check_out: string, payout: number) =>
     ({ channel: "airbnb" as const, check_in, check_out, nights: 0, booked_at: null, adults: null, children: null, payout, commission: null });
 
-  it("여러 박 예약도 평일·주말 1박 요금을 나눠 찾는다", async () => {
-    const { weekdayWeekendRates } = await import("../lib/insights");
-    // 청소비 50,000 + 평일 100,000 + 주말 150,000 으로 만든 예약들 (2026-11-02 월, 11-06 금)
-    const price = (wd: number, we: number) => 50_000 + wd * 100_000 + we * 150_000;
+  it("청소비를 빼고 기준 요금 비율(평일 124,000 : 주말 175,000)로 평일·주말 밤에 나눈다", async () => {
+    const { weekdayWeekendRates, RATE_DEFAULTS } = await import("../lib/insights");
+    // 정한 요금의 90%로 팔린 예약들 + 청소비 50,000 (2026-11-02 월, 11-06 금)
+    const price = (wd: number, we: number) => 50_000 + 0.9 * (wd * 124_000 + we * 175_000);
     const rows = [
       row("2026-11-02", "2026-11-03", price(1, 0)), row("2026-11-03", "2026-11-05", price(2, 0)),
-      row("2026-11-06", "2026-11-07", price(0, 1)), row("2026-11-06", "2026-11-08", price(0, 2)),
-      row("2026-11-05", "2026-11-08", price(1, 2)), row("2026-11-08", "2026-11-10", price(2, 0)),
-      row("2026-11-12", "2026-11-14", price(1, 1)), row("2026-11-13", "2026-11-16", price(1, 2)),
-      row("2026-11-16", "2026-11-17", price(1, 0)), row("2026-11-20", "2026-11-21", price(0, 1)),
+      row("2026-11-06", "2026-11-07", price(0, 1)), row("2026-11-05", "2026-11-08", price(1, 2)),
+      row("2026-11-13", "2026-11-16", price(1, 2)),
     ];
-    const r = weekdayWeekendRates(rows, (x) => x.payout!)!;
-    expect(r.weekday).toBeCloseTo(100_000, 0);
-    expect(r.weekend).toBeCloseTo(150_000, 0);
-    expect(r.fixed).toBeCloseTo(50_000, 0);
+    const r = weekdayWeekendRates(rows, RATE_DEFAULTS)!;
+    expect(r.guest.weekday).toBeCloseTo(111_600, 0);
+    expect(r.guest.weekend).toBeCloseTo(157_500, 0);
+    expect(r).toMatchObject({ stays: 5, weekdayNights: 5, weekendNights: 5 });
   });
 
   it("이번 달 합계는 달을 넘는 예약의 이번 달 몫만 넣는다", async () => {

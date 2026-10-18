@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import { TRIP_DEFAULTS, type TripConfig } from "./amounts";
 import { intEnv } from "./env";
+import { RATE_DEFAULTS, type RateBasis } from "./insights";
 import { getSetting } from "./settings";
 import type { Channel } from "./types";
 
@@ -36,6 +37,13 @@ export async function getTripCleaningFee(sql: postgres.Sql): Promise<number> {
   const raw = await getSetting(sql, "trip_cleaning_fee");
   const n = Number(raw ?? "");
   return raw && Number.isFinite(n) && n >= 0 ? n : TRIP_DEFAULTS.cleaningFee;
+}
+
+// 평일·주말 1박 요금 분석에 쓰는 기준 요금 (사장님이 정한 에어비앤비 요금). 청소비는 트립닷컴 설정과 같은 값.
+export async function getRateBasis(sql: postgres.Sql): Promise<RateBasis> {
+  const [wd, we, cleaning] = await Promise.all([getSetting(sql, "base_weekday_rate"), getSetting(sql, "base_weekend_rate"), getTripCleaningFee(sql)]);
+  const n = (v: string | null, d: number) => (v && Number(v) > 0 ? Number(v) : d);
+  return { weekday: n(wd, RATE_DEFAULTS.weekday), weekend: n(we, RATE_DEFAULTS.weekend), cleaning };
 }
 
 export async function getTripConfig(sql: postgres.Sql): Promise<TripConfig> {
