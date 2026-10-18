@@ -274,7 +274,7 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
     notes.push({
       tag: "1박 객단가 (청소비 제외)",
       tone: level < 90 ? "warn" : undefined,
-      text: `손님 결제 기준 ${split(rates.guest)}, 사장님 수령 기준 ${split(rates.host)}이에요. 정한 요금의 ${level}% 수준으로 팔렸어요.`,
+      text: `손님 결제 기준 ${split(rates.guest)}, 정산액 기준 ${split(rates.host)}이에요. 정한 요금의 ${level}% 수준으로 팔렸어요.`,
     });
   }
   const filled = weekdays.filter((w) => w.nights > 0 || w.occupancy > 0);
@@ -297,7 +297,7 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
     const ea = adr(early);
     if (la && ea && Math.abs(pct(la, ea)) >= 5) {
       const d = pct(la, ea);
-      notes.push({ tag: "예약 시점", text: `임박 예약(7일 이내)은 박당 ${won(la)}으로, 미리 한 예약(${won(ea)})보다 ${d > 0 ? `${d}% 비싸게` : `${-d}% 싸게`} 팔렸어요.` });
+      notes.push({ tag: "예약 시점", text: `임박 예약(7일 이내)은 정산액 박당 ${won(la)}으로, 미리 한 예약(${won(ea)})보다 ${d > 0 ? `${d}% 비싸게` : `${-d}% 싸게`} 팔렸어요.` });
     }
   }
   const stayTotal = stay.reduce((a, b) => a + b.count, 0);
@@ -379,7 +379,7 @@ export const RATE_DEFAULTS: RateBasis = { weekday: 124_000, weekend: 175_000, cl
  * 평일(일~목 밤)·주말(금·토 밤) 1박 평균 요금 (사장님 방식, 2026-10-18).
  * 예약마다 받은 금액에서 청소비를 빼고, 남은 객실 금액을 기준 요금 비율(평일 124,000 : 주말 175,000)로 그 예약의 밤에 나눈다.
  * 모든 예약의 평일 몫 ÷ 평일 박수, 주말 몫 ÷ 주말 박수가 평균 요금이다.
- * 손님 결제 기준(정산액 + 수수료)과 사장님 수령 기준(정산액) 두 가지로 낸다.
+ * 손님 결제 기준(정산액 + 수수료)과 정산액 기준 두 가지로 낸다.
  */
 export function weekdayWeekendRates(rows: StayRow[], basis: RateBasis) {
   const sum = { gWd: 0, gWe: 0, hWd: 0, hWe: 0, wd: 0, we: 0, stays: 0 };

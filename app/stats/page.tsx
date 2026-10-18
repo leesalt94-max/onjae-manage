@@ -202,7 +202,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
         <Columns points={revenuePoints} series={SERIES} format={short} />
         <p className="muted small">숙박한 밤 기준으로 나눠 담았어요. 흐린 막대는 앞으로의 달(지금까지 들어온 예약만)이에요.</p>
         <table className="month-table">
-          <thead><tr><th>월</th>{SERIES.map((s) => <th key={s.key} className="num wide-only">{s.label}</th>)}<th className="num">정산액</th><th className="num">숙박</th><th className="num">박당</th></tr></thead>
+          <thead><tr><th>월</th>{SERIES.map((s) => <th key={s.key} className="num wide-only">{s.label}</th>)}<th className="num">정산액</th><th className="num">숙박</th><th className="num">정산액 박당</th></tr></thead>
           <tbody>
             {ins.months.map((m) => {
               const total = CHANNELS.reduce((a, c) => a + m.revenue[c], 0);
@@ -275,13 +275,13 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
         <div>
           <h2>요일별 가동률 (그날 밤)</h2>
           <div className="panel">
-            <HBars rows={ins.weekdays.map((w) => ({ label: w.label, value: w.occupancy, note: w.adr ? `박당 ${short(w.adr)}` : undefined }))} format={pctOf} />
+            <HBars rows={ins.weekdays.map((w) => ({ label: w.label, value: w.occupancy, note: w.adr ? `정산액 박당 ${short(w.adr)}` : undefined }))} format={pctOf} />
           </div>
         </div>
         <div>
           <h2>예약이 들어온 시점</h2>
           <div className="panel">
-            <HBars rows={ins.lead.map((b) => ({ label: b.label, value: b.count, note: `${share(b.count, leadTotal)}${b.nights ? ` · 박당 ${short(b.revenue / b.nights)}` : ""}` }))} format={(n) => `${n}건`} />
+            <HBars rows={ins.lead.map((b) => ({ label: b.label, value: b.count, note: `${share(b.count, leadTotal)}${b.nights ? ` · 정산액 박당 ${short(b.revenue / b.nights)}` : ""}` }))} format={(n) => `${n}건`} />
           </div>
         </div>
         <div>
@@ -309,7 +309,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
             rows={regions.map((r) => ({
               label: REGION_LABELS[r.region] ?? r.region,
               value: r.count,
-              note: `${share(r.count, regionTotal)} · 평균 ${r.count ? (r.nights / r.count).toFixed(1) : "-"}박${r.nights ? ` · 박당 ${short(r.payout / r.nights)}` : ""}`,
+              note: `${share(r.count, regionTotal)} · 평균 ${r.count ? (r.nights / r.count).toFixed(1) : "-"}박${r.nights ? ` · 정산액 박당 ${short(r.payout / r.nights)}` : ""}`,
             }))}
             format={(n) => `${n}건`}
           />
