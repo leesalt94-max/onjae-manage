@@ -3,8 +3,9 @@ import { listCredentialStatus } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { isKakaoConnected } from "@/lib/kakao";
 import { hasPcToken } from "@/lib/pc-token";
+import { getRoomCount } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
-import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, toggleCredentialAction } from "../actions";
+import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveRoomCountAction, toggleCredentialAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { PcTokenForm } from "./pc-token";
@@ -15,12 +16,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   await requireOwner();
   const params = await searchParams;
   const sql = db();
-  const [creds, kakao, pcToken] = await Promise.all([listCredentialStatus(sql), isKakaoConnected(sql), hasPcToken(sql)]);
+  const [creds, kakao, pcToken, roomCount] = await Promise.all([
+    listCredentialStatus(sql), isKakaoConnected(sql), hasPcToken(sql), getRoomCount(sql),
+  ]);
 
   return (
     <OwnerShell>
       <h1>설정</h1>
       <Flash params={params} />
+
+      <h2>객실 수</h2>
+      <div className="panel">
+        <p className="muted">동시에 받을 수 있는 객실(유닛) 수입니다. 통계의 가동률을 이 숫자로 나눠 계산합니다.</p>
+        <form action={saveRoomCountAction} className="row">
+          <input type="number" name="roomCount" min={1} max={50} defaultValue={roomCount} required style={{ width: 100 }} />
+          <button type="submit">저장</button>
+        </form>
+      </div>
 
       <h2>내 컴퓨터 수집 프로그램</h2>
       <div className="panel">

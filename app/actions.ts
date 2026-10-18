@@ -12,6 +12,7 @@ import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
 import { createPcToken } from "@/lib/pc-token";
+import { setSetting } from "@/lib/settings";
 import { CHANNELS } from "@/lib/types";
 
 const channelSchema = z.enum(CHANNELS);
@@ -79,6 +80,14 @@ export async function uploadAction(formData: FormData) {
   const result = await importFiles(db(), channel.data, [text], "csv_upload");
   if (!result.ok) back("/upload", result.error ?? "읽을 수 있는 예약이 없습니다.", "error");
   back("/upload", `새 예약 ${result.inserted}건, 갱신 ${result.updated}건, 건너뛴 행 ${result.skipped}개`);
+}
+
+export async function saveRoomCountAction(formData: FormData) {
+  await requireOwner();
+  const n = Number(formData.get("roomCount"));
+  if (!Number.isInteger(n) || n < 1 || n > 50) back("/settings", "객실 수는 1~50 사이 숫자로 넣어 주세요.", "error");
+  await setSetting(db(), "room_count", String(n));
+  back("/settings", `객실 수를 ${n}개로 저장했습니다. 통계 가동률에 바로 반영됩니다.`);
 }
 
 export async function kakaoTestAction() {

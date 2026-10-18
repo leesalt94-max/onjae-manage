@@ -1,5 +1,13 @@
 import type postgres from "postgres";
+import { intEnv } from "./env";
+import { getSetting } from "./settings";
 import type { Channel } from "./types";
+
+// 가동률 계산에 쓰는 객실(유닛) 수. 설정 화면에서 바꾸고, 없으면 ROOM_COUNT 환경변수, 그것도 없으면 1.
+export async function getRoomCount(sql: postgres.Sql): Promise<number> {
+  const n = Number.parseInt((await getSetting(sql, "room_count")) ?? "", 10);
+  return Number.isInteger(n) && n > 0 ? n : intEnv("ROOM_COUNT", 1);
+}
 
 export interface MonthlyChannelRow {
   month: string; // YYYY-MM
@@ -18,7 +26,8 @@ export async function monthlyByChannel(sql: postgres.Sql, months = 12): Promise<
     SELECT to_char(check_in, 'YYYY-MM') AS month, channel, currency,
            count(*)::int AS bookings,
            sum(nights)::int AS nights,
-           coalesce(sum(guest_paid), 0)::float AS "guestPaid",
+           -- 에어비앤비 거래 내역은 손님 결제액이 없어 호스트 총액(또는 정산액+수수료)으로 대신한다.
+           coalesce(sum(coalesce(guest_paid, gross_amount, payout_amount + commission)), 0)::float AS "guestPaid",
            coalesce(sum(commission), 0)::float AS commission,
            coalesce(sum(payout_amount), 0)::float AS payout
     FROM reservations

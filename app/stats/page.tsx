@@ -1,9 +1,8 @@
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { intEnv } from "@/lib/env";
 import { money, pct } from "@/lib/format";
 import { AGE_LABELS, GENDER_LABELS } from "@/lib/guests";
-import { ageBands, genderBreakdown, guestCoverage, monthlyByChannel, occupancy, summary } from "@/lib/stats";
+import { ageBands, genderBreakdown, getRoomCount, guestCoverage, monthlyByChannel, occupancy, summary } from "@/lib/stats";
 import { CHANNEL_LABELS } from "@/lib/types";
 import { OwnerShell } from "../nav";
 
@@ -33,9 +32,10 @@ export default async function StatsPage() {
   const sql = db();
   const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
   const yearAhead = new Date(Date.now() + 86_400_000 * 366).toISOString().slice(0, 10);
+  const roomCount = await getRoomCount(sql);
   const [monthly, occ, sum, genders, ages, coverage] = await Promise.all([
     monthlyByChannel(sql, 12),
-    occupancy(sql, intEnv("ROOM_COUNT", 1), 12),
+    occupancy(sql, roomCount, 12),
     summary(sql, yearAgo, yearAhead),
     genderBreakdown(sql, yearAgo, yearAhead),
     ageBands(sql, yearAgo, yearAhead),
@@ -80,10 +80,11 @@ export default async function StatsPage() {
             ))}
           </tbody>
         </table>
-        <p className="muted">에어비앤비는 거래 내역 파일이 들어와야 결제액·수수료가 채워집니다.</p>
+        <p className="muted">에어비앤비는 손님 결제액이 파일에 없어 정산액+수수료(호스트 총액)를 결제액으로 씁니다. 트립닷컴은 판매가가 비어 있으면 수수료를 알 수 없습니다.</p>
       </div>
 
       <h2>월별</h2>
+      <p className="muted">가동률은 객실 {roomCount}개 기준입니다. 객실 수는 설정에서 바꿀 수 있어요.</p>
       <div className="panel table-wrap">
         <table>
           <thead><tr><th>월</th><th className="num">가동률</th><th className="num">예약</th><th className="num">숙박일</th><th className="num">정산액</th><th className="num">ADR(박당 정산)</th></tr></thead>
