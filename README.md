@@ -31,7 +31,7 @@ Vercel 무료 요금제는 예약 실행이 하루 1회뿐이고 브라우저 �
 ## 처음 설정하기
 
 1. **Neon** 에서 무료 Postgres 를 만들고 접속 주소를 복사합니다 (Vercel 대시보드의 Storage 메뉴에서도 연결 가능).
-2. 비밀값 만들기 (로컬에서 `npm ci` 후):
+2. 비밀값 만들기: Vercel 에 올린 뒤 `https://<사이트>/setup` 을 열면 브라우저 안에서 `ENCRYPTION_KEY`, `SESSION_SECRET`, `ADMIN_PASSWORD_HASH` 를 만들어 줍니다 (관리자 비밀번호가 등록되면 이 화면은 닫힘). 터미널을 쓴다면 로컬에서 `npm ci` 후:
    ```bash
    npm run gen-key                      # ENCRYPTION_KEY
    npm run gen-key                      # SESSION_SECRET

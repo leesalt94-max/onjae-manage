@@ -8,6 +8,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
     <main style={{ maxWidth: 420 }}>
       <h1>온재 숙소 관리</h1>
       <Flash params={params} />
+      {!process.env.ADMIN_PASSWORD_HASH && (
+        <div className="notice warn">
+          아직 관리자 비밀번호가 등록되지 않았습니다. <a href="/setup">비밀값 만들기</a>에서 시작하세요.
+        </div>
+      )}
       <form action={loginAction} className="stack panel">
         <label>
           비밀번호

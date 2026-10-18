@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "./lib/session";
 
-// 로그인 화면만 공개. 나머지는 사장님 로그인 필요.
-const PUBLIC_PREFIXES = ["/login"];
+// 로그인 화면과 첫 설정 화면만 공개 (설정 화면은 관리자 비밀번호가 등록되면 스스로 닫힌다).
+const PUBLIC_PREFIXES = ["/login", "/setup"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
