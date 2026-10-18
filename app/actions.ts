@@ -90,6 +90,15 @@ export async function saveRoomCountAction(formData: FormData) {
   back("/settings", `객실 수를 ${n}개로 저장했습니다. 통계 가동률에 바로 반영됩니다.`);
 }
 
+export async function saveTripCommissionAction(formData: FormData) {
+  await requireOwner();
+  const raw = String(formData.get("tripCommissionPct") ?? "").trim();
+  const n = Number(raw);
+  if (raw !== "" && !(Number.isFinite(n) && n > 0 && n < 100)) back("/settings", "수수료율은 0보다 크고 100보다 작은 숫자로 넣어 주세요.", "error");
+  await setSetting(db(), "trip_commission_pct", raw);
+  back("/settings", raw ? `트립닷컴 수수료율을 ${n}%로 저장했습니다. 통계에 바로 반영됩니다.` : "트립닷컴 수수료율을 비웠습니다.");
+}
+
 export async function kakaoTestAction() {
   await requireOwner();
   const ok = await sendKakao(db(), "온재 숙소 관리 알림 테스트입니다.");

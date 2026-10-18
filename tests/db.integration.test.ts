@@ -79,6 +79,24 @@ HMABC123,Canceled by guest,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"�
     await lastSyncs(sql);
   });
 
+  it("트립닷컴 입금가만 있는 예약은 설정한 수수료율로 판매가·수수료를 역산한다", async () => {
+    const { parseExport } = await import("../lib/parsers");
+    const { upsertReservations } = await import("../lib/ingest");
+    const { monthlyByChannel } = await import("../lib/stats");
+    const { setSetting } = await import("../lib/settings");
+    const d = new Date();
+    const day = (n: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), n)).toISOString().slice(0, 10);
+    const parsed = parseExport("trip", `예약 번호,예약 상태,체크인 날짜,체크 아웃 날짜,투숙 박수,통화 종류,객실 입금가,객실 판매가
+TRIPRATE1,확인함,${day(1)},${day(3)},2,KRW,85000.00,`);
+    await upsertReservations(sql, parsed.reservations, "csv_upload");
+    const tripRow = async () => (await monthlyByChannel(sql, 1)).find((r) => r.channel === "trip")!;
+
+    expect(await tripRow()).toMatchObject({ payout: 85000, guestPaid: 0, commission: 0 });
+    await setSetting(sql, "trip_commission_pct", "15");
+    expect(await tripRow()).toMatchObject({ payout: 85000, guestPaid: 100000, commission: 15000 });
+    await setSetting(sql, "trip_commission_pct", "");
+  });
+
   it("사장님이 입력한 투숙객 정보는 예약마다 통째로 바뀌고, 비우면 미입력이 된다", async () => {
     const { saveGuestProfiles, getReservationGuests } = await import("../lib/guests");
     const [{ id }] = await sql<{ id: number }[]>`SELECT id FROM reservations WHERE confirmation = 'B1'`;

@@ -20,19 +20,33 @@ export interface MonthlyChannelRow {
   payout: number;
 }
 
+// 트립닷컴 선결제는 입금가(정산액)만 알려 준다. 사장님이 설정에 넣은 수수료율(%)로 판매가를 역산한다:
+// 판매가 = 입금가 ÷ (1 − 수수료율), 수수료 = 판매가 − 입금가. 비어 있으면 역산하지 않는다.
+export async function getTripCommissionPct(sql: postgres.Sql): Promise<number | null> {
+  const n = Number((await getSetting(sql, "trip_commission_pct")) ?? "");
+  return Number.isFinite(n) && n > 0 && n < 100 ? n : null;
+}
+
 // 체크인 월 기준, 취소·노쇼 제외.
 export async function monthlyByChannel(sql: postgres.Sql, months = 12): Promise<MonthlyChannelRow[]> {
+  const tripRate = (await getTripCommissionPct(sql)) ?? 0;
   return sql<MonthlyChannelRow[]>`
+    WITH r AS (
+      SELECT *,
+             CASE WHEN channel = 'trip' AND ${tripRate}::numeric > 0 AND guest_paid IS NULL AND commission IS NULL
+                  THEN payout_amount / (1 - ${tripRate}::numeric / 100) END AS trip_gross
+      FROM reservations
+      WHERE status IN ('confirmed', 'completed')
+        AND check_in >= date_trunc('month', CURRENT_DATE) - make_interval(months => ${months - 1})
+    )
     SELECT to_char(check_in, 'YYYY-MM') AS month, channel, currency,
            count(*)::int AS bookings,
            sum(nights)::int AS nights,
            -- 에어비앤비 거래 내역은 손님 결제액이 없어 호스트 총액(또는 정산액+수수료)으로 대신한다.
-           coalesce(sum(coalesce(guest_paid, gross_amount, payout_amount + commission)), 0)::float AS "guestPaid",
-           coalesce(sum(commission), 0)::float AS commission,
+           coalesce(sum(coalesce(guest_paid, gross_amount, payout_amount + commission, trip_gross)), 0)::float AS "guestPaid",
+           coalesce(sum(coalesce(commission, trip_gross - payout_amount)), 0)::float AS commission,
            coalesce(sum(payout_amount), 0)::float AS payout
-    FROM reservations
-    WHERE status IN ('confirmed', 'completed')
-      AND check_in >= date_trunc('month', CURRENT_DATE) - make_interval(months => ${months - 1})
+    FROM r
     GROUP BY 1, 2, 3
     ORDER BY 1 DESC, 2`;
 }
