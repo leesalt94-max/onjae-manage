@@ -1,0 +1,54 @@
+name: 자동 수집
+
+on:
+  schedule:
+    # 3시간마다 (UTC 기준 분 17). GitHub 사정으로 몇 분~수십 분 늦게 시작될 수 있다.
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "특정 플랫폼만 (airbnb, booking, trip). 비우면 전부"
+        required: false
+        default: ""
+      debug_screenshots:
+        description: "실패 화면 저장 (개인정보가 찍힐 수 있어 1일 뒤 자동 삭제)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: 수집 실행
+        run: npm run collect -- "${CHANNEL}"
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          APP_URL: ${{ secrets.APP_URL }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          OTP_WAIT_MINUTES: "8"
+          DEBUG_SCREENSHOTS: ${{ inputs.debug_screenshots && '1' || '0' }}
+      - if: ${{ always() && inputs.debug_screenshots }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: debug-screenshots/
+          retention-days: 1
+          if-no-files-found: ignore

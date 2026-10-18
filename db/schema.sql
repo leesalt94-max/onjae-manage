@@ -1,0 +1,91 @@
+-- 숙소 통합관리 DB 스키마. scripts/migrate.ts 가 여러 번 실행해도 안전하도록 IF NOT EXISTS 로 작성.
+
+CREATE TABLE IF NOT EXISTS reservations (
+  id              BIGSERIAL PRIMARY KEY,
+  channel         TEXT NOT NULL CHECK (channel IN ('airbnb', 'booking', 'trip')),
+  confirmation    TEXT NOT NULL,                 -- 플랫폼 예약번호
+  status          TEXT NOT NULL DEFAULT 'confirmed'
+                  CHECK (status IN ('confirmed', 'cancelled', 'no_show', 'completed')),
+  listing         TEXT,
+  adults          INTEGER,
+  children        INTEGER,
+  infants         INTEGER,
+  booked_at       DATE,
+  check_in        DATE NOT NULL,
+  check_out       DATE NOT NULL,
+  nights          INTEGER NOT NULL,
+  currency        TEXT NOT NULL DEFAULT 'KRW',
+  gross_amount    NUMERIC(14, 2),                -- 할인 전 정가
+  discount_amount NUMERIC(14, 2),
+  guest_paid      NUMERIC(14, 2),                -- 게스트 실결제액
+  commission      NUMERIC(14, 2),                -- 플랫폼 수수료
+  taxes           NUMERIC(14, 2),
+  payout_amount   NUMERIC(14, 2),                -- 호스트 정산액
+  cancelled_at    DATE,
+  source          TEXT NOT NULL,                 -- auto_login | csv_upload
+  raw             JSONB NOT NULL,                -- 원본 행 (이름·연락처 등 개인정보 칸은 빼고 저장)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (channel, confirmation)
+);
+CREATE INDEX IF NOT EXISTS reservations_check_in_idx ON reservations (check_in);
+
+-- 게스트가 체크인 폼에 직접 입력한 인원별 성별·나이. 이름 등 식별정보는 두지 않는다.
+CREATE TABLE IF NOT EXISTS guest_profiles (
+  id             BIGSERIAL PRIMARY KEY,
+  reservation_id BIGINT NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
+  gender         TEXT NOT NULL CHECK (gender IN ('male', 'female', 'other', 'undisclosed')),
+  age            INTEGER CHECK (age BETWEEN 0 AND 120),
+  consented_at   TIMESTAMPTZ NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS guest_profiles_reservation_idx ON guest_profiles (reservation_id);
+
+-- 플랫폼 로그인 정보와 브라우저 세션. 모든 값은 AES-256-GCM 으로 암호화해 저장.
+CREATE TABLE IF NOT EXISTS platform_credentials (
+  channel             TEXT PRIMARY KEY CHECK (channel IN ('airbnb', 'booking', 'trip')),
+  username_enc        TEXT NOT NULL,
+  password_enc        TEXT NOT NULL,
+  session_state_enc   TEXT,                      -- Playwright storageState
+  enabled             BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 2단계 인증 코드 요청. 수집기가 pending 행을 만들고, 사장님이 사이트에서 코드를 입력.
+CREATE TABLE IF NOT EXISTS otp_requests (
+  id          BIGSERIAL PRIMARY KEY,
+  channel     TEXT NOT NULL,
+  prompt      TEXT NOT NULL,
+  code_enc    TEXT,
+  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'answered', 'used', 'expired')),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sync_runs (
+  id          BIGSERIAL PRIMARY KEY,
+  channel     TEXT NOT NULL,
+  source      TEXT NOT NULL,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  ok          BOOLEAN,
+  inserted    INTEGER NOT NULL DEFAULT 0,
+  updated     INTEGER NOT NULL DEFAULT 0,
+  error       TEXT
+);
+CREATE INDEX IF NOT EXISTS sync_runs_channel_idx ON sync_runs (channel, started_at DESC);
+
+-- 카카오 토큰 등 앱 설정. secret 값은 암호화해서 value 에 저장.
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id         BIGSERIAL PRIMARY KEY,
+  ip         TEXT NOT NULL,
+  ok         BOOLEAN NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS login_attempts_ip_idx ON login_attempts (ip, created_at DESC);

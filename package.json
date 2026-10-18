@@ -1,0 +1,43 @@
+{
+  "name": "onjae-manage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "에어비앤비·부킹닷컴·트립닷컴 예약과 정산을 한곳에 모으는 숙소 통합관리 사이트",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "collect": "tsx collector/run.ts",
+    "hash-password": "tsx scripts/hash-password.ts",
+    "gen-key": "tsx scripts/gen-key.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3",
+    "jose": "6.2.12",
+    "next": "16.4.2",
+    "otplib": "12.0.1",
+    "papaparse": "5.7.0",
+    "playwright": "1.56.1",
+    "postgres": "3.4.9",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "zod": "4.1.13"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "2.4.6",
+    "@types/node": "22.20.5",
+    "@types/papaparse": "5.5.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "5.0.5"
+  }
+}

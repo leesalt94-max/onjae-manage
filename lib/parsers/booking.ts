@@ -1,0 +1,78 @@
+import type { NormalizedReservation, ParseResult, ReservationStatus } from "../types";
+import {
+  detectCurrency, nightsBetween, parseAmount, parseDate, parseIntOrNull, pick, stripPersonal, type Row,
+} from "./common";
+
+// 부킹닷컴 엑스트라넷 > 예약 > 다운로드(CSV) 파일.
+const B = {
+  confirmation: ["Book number", "Reservation number", "예약 번호"],
+  checkIn: ["Check-in", "Arrival", "체크인"],
+  checkOut: ["Check-out", "Departure", "체크아웃"],
+  booked: ["Booked on", "예약일"],
+  status: ["Status", "상태"],
+  people: ["People", "Persons", "인원"],
+  adults: ["Adults", "성인"],
+  children: ["Children", "아동"],
+  price: ["Price", "Total price", "요금"],
+  commissionAmount: ["Commission amount", "수수료 금액"],
+  commissionPct: ["Commission %", "Commission", "수수료율"],
+  currency: ["Currency", "통화"],
+  cancelled: ["Cancellation date", "취소일"],
+  unit: ["Unit type", "Room type", "객실 유형"],
+  nights: ["Duration (nights)", "Nights", "박"],
+};
+
+function mapStatus(value: string | null): ReservationStatus {
+  const v = (value ?? "").toLowerCase();
+  if (v.includes("no_show") || v.includes("no show") || v.includes("노쇼")) return "no_show";
+  if (v.includes("cancel") || v.includes("취소")) return "cancelled";
+  return "confirmed";
+}
+
+export function parseBooking(rows: Row[]): ParseResult {
+  const skipped: ParseResult["skipped"] = [];
+  const reservations: NormalizedReservation[] = [];
+
+  rows.forEach((row, i) => {
+    const confirmation = pick(row, B.confirmation);
+    const checkIn = parseDate(pick(row, B.checkIn));
+    const checkOut = parseDate(pick(row, B.checkOut));
+    if (!confirmation || !checkIn || !checkOut) {
+      skipped.push({ row: i + 2, reason: "예약번호 또는 날짜 없음" });
+      return;
+    }
+    const priceRaw = pick(row, B.price);
+    const price = parseAmount(priceRaw);
+    let commission = parseAmount(pick(row, B.commissionAmount));
+    if (commission === null && price !== null) {
+      const pct = parseAmount(pick(row, B.commissionPct));
+      if (pct !== null) commission = Math.round(price * pct) / 100;
+    }
+    const adults = parseIntOrNull(pick(row, B.adults)) ?? parseIntOrNull(pick(row, B.people));
+
+    reservations.push({
+      channel: "booking",
+      confirmation,
+      status: mapStatus(pick(row, B.status)),
+      listing: pick(row, B.unit),
+      adults,
+      children: parseIntOrNull(pick(row, B.children)),
+      infants: null,
+      bookedAt: parseDate(pick(row, B.booked)),
+      checkIn,
+      checkOut,
+      nights: parseIntOrNull(pick(row, B.nights)) ?? nightsBetween(checkIn, checkOut),
+      currency: pick(row, B.currency) ?? detectCurrency(priceRaw) ?? "KRW",
+      grossAmount: price,
+      discountAmount: null,
+      guestPaid: price,
+      commission,
+      taxes: null,
+      payoutAmount: price !== null && commission !== null ? price - commission : null,
+      cancelledAt: parseDate(pick(row, B.cancelled)),
+      raw: stripPersonal(row),
+    });
+  });
+
+  return { reservations, skipped };
+}
