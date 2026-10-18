@@ -50,7 +50,7 @@ export interface Insights {
   notes: Note[];
 }
 
-/** 한눈에 보기 한 줄. tag 는 주제(채널·요일·앞으로 등), good/warn 은 좋은 소식·챙길 일 표시. */
+/** 분석 내용 한 줄. tag 는 주제(채널·요일·앞으로 등), good/warn 은 좋은 소식·챙길 일 표시. */
 export interface Note { tag: string; text: string; tone?: "good" | "warn" }
 
 const DAY = 86_400_000;

@@ -113,7 +113,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
 
       {ins.notes.length > 0 && (
         <div className="panel insights">
-          <h2 style={{ marginTop: 0 }}>한눈에 보기</h2>
+          <h2 style={{ marginTop: 0 }}>분석 내용</h2>
           <ul>
             {ins.notes.map((n) => (
               <li key={n.text} className={n.tone}>
