@@ -3,13 +3,13 @@ import {
   detectCurrency, nightsBetween, parseAmount, parseDate, parseIntOrNull, pick, stripPersonal, type Row,
 } from "./common";
 
-// 부킹닷컴 엑스트라넷 > 예약 > 다운로드(CSV) 파일.
+// 부킹닷컴 엑스트라넷 > 예약 > 다운로드(CSV·xls) 파일. 2026-10 한국어 화면 실제 xls 헤더도 받는다.
 const B = {
   confirmation: ["Book number", "Reservation number", "예약 번호"],
   checkIn: ["Check-in", "Arrival", "체크인"],
   checkOut: ["Check-out", "Departure", "체크아웃"],
-  booked: ["Booked on", "예약일"],
-  status: ["Status", "상태"],
+  booked: ["Booked on", "예약일", "예약 날짜"],
+  status: ["Status", "상태", "예약 상태"],
   people: ["People", "Persons", "인원"],
   adults: ["Adults", "성인"],
   children: ["Children", "아동"],
@@ -19,7 +19,7 @@ const B = {
   currency: ["Currency", "통화"],
   cancelled: ["Cancellation date", "취소일"],
   unit: ["Unit type", "Room type", "객실 유형"],
-  nights: ["Duration (nights)", "Nights", "박"],
+  nights: ["Duration (nights)", "Nights", "박", "숙박일수(박)"],
 };
 
 function mapStatus(value: string | null): ReservationStatus {

@@ -160,3 +160,18 @@ describe("트립닷컴 한국어 화면 내보내기", () => {
     expect(JSON.stringify(r)).not.toMatch(/HONG|늦게/);
   });
 });
+
+describe("부킹닷컴 한국어 화면 내보내기", () => {
+  it("2026-10 실제 헤더로 읽고 예약자·투숙객·메모·주소·전화는 버린다", () => {
+    const csv = `예약 번호,예약자,투숙객,체크인,체크아웃,예약 날짜,예약 상태,객실 단위,인원,성인,아동,아동 연령(만 기준),요금,수수료율,수수료 금액,결제 상태,결제 수단(결제 서비스 제공업체),메모,Booker country,여행 목적,사용 기기 유형,객실 유형,숙박일수(박),취소일,주소,전화번호
+1000000001,HONG GILDONG,HONG GILDONG,2026-11-01,2026-11-03,2026-10-01,ok,1,3,2,1,5,200000 KRW,15,30000 KRW,Booking.com을 통한 결제,,늦게 도착,kr,Leisure,Mobile,Onjae,2,,Seoul street 1,+82100000000
+1000000002,KIM,KIM,2026-12-01,2026-12-02,2026-10-02,cancelled_by_guest,1,2,2,0,,0 KRW,15,0 KRW,,,,kr,,,Onjae,1,2026-10-05,,`;
+    const { reservations } = parseExport("booking", csv);
+    expect(reservations).toHaveLength(2);
+    expect(reservations[0]).toMatchObject({
+      confirmation: "1000000001", status: "confirmed", bookedAt: "2026-10-01", nights: 2, adults: 2, children: 1,
+    });
+    expect(reservations[1].status).toBe("cancelled");
+    expect(JSON.stringify(reservations)).not.toMatch(/HONG|KIM|늦게|Seoul|\+82/);
+  });
+});
