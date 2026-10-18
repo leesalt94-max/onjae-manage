@@ -4,6 +4,7 @@ import { money, pct } from "@/lib/format";
 import { AGE_LABELS, GENDER_LABELS, REGION_LABELS } from "@/lib/guests";
 import { buildInsights, getOpenedOn, stayRows } from "@/lib/insights";
 import { computeAmounts } from "@/lib/amounts";
+import { forecastSales, SALES_THRESHOLD, type YearForecast } from "@/lib/forecast";
 import { ageBands, genderBreakdown, getRateBasis, getRoomCount, getTripConfig, guestCoverage, regionBreakdown, summary } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
 import type { SearchParams } from "../flash";
@@ -19,6 +20,10 @@ const won = (n: number) => money(n, "KRW");
 // 축 눈금은 짧게: 1,200,000 → 120만
 const short = (n: number) => (n >= 10_000 ? `${Math.round(n / 10_000).toLocaleString("ko-KR")}만` : `${Math.round(n)}`);
 const pctOf = (n: number) => `${Math.round(n * 100)}%`;
+const man = (n: number) => `${(Math.round(n / 1_000_000) * 100).toLocaleString("ko-KR")}만원`;
+// 예측 막대: 기준(4,800만원)이 막대의 80% 위치에 오도록
+const pctBar = (n: number) => Math.min(100, (n / (SALES_THRESHOLD * 1.25)) * 100);
+const VERDICT = { over: "넘을 가능성 높음", close: "넘을 수도 있음", under: "넘지 않을 듯" } as const;
 
 const DAY = 86_400_000;
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
@@ -60,6 +65,13 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
   for (const r of rows) {
     if (r.commission === null) r.commission = computeAmounts({ channel: r.channel, guest_paid: null, commission: null, payout_amount: r.payout }, trip).commission;
   }
+  // 연 총매출 예측: 선택한 기간과 상관없이 작년 1월~내년 말 예약 전체로 계산한다.
+  const year = Number(today.slice(0, 4));
+  const yearRows = await stayRows(sql, `${year - 1}-01-01`, `${year + 2}-01-01`);
+  for (const r of yearRows) {
+    if (r.commission === null) r.commission = computeAmounts({ channel: r.channel, guest_paid: null, commission: null, payout_amount: r.payout }, trip).commission;
+  }
+  const forecast = forecastSales(yearRows, today, opened.date, [year, year + 1]);
   const ins = buildInsights(rows, { today, from, to, openedOn: opened.date, roomCount, monthsAhead: MONTHS_AHEAD, rates: await getRateBasis(sql) });
   const occStart = opened.date && opened.date > from ? opened.date : from;
 
@@ -84,6 +96,15 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
   const pastTotal = pastMonths.reduce((a, m) => a + CHANNELS.reduce((b, c) => b + m.revenue[c], 0), 0);
   const pastNights = pastMonths.reduce((a, m) => a + m.nights, 0);
   const monthText = (m: string) => `${m.slice(2, 4)}년 ${Number(m.slice(5))}월`;
+  if (forecast) {
+    const say = (f: YearForecast) => `${f.year}년 ${man(f.expected)}(${man(f.low)}~${man(f.high)})`;
+    const over = forecast.years.filter((f) => f.verdict !== "under");
+    ins.notes.unshift({
+      tag: "연 매출 예측",
+      tone: over.length ? "warn" : "good",
+      text: `총매출(수수료 빼기 전, 청소비 포함) 예상은 ${forecast.years.map(say).join(", ")}이에요. ${over.length ? `${over.map((f) => `${f.year}년`).join("·")}은 4,800만원을 넘을 수 있어요.` : "두 해 모두 4,800만원을 넘지 않을 것 같아요."}`,
+    });
+  }
   const leadTotal = ins.lead.reduce((a, b) => a + b.count, 0);
   const stayTotal = ins.stay.reduce((a, b) => a + b.count, 0);
   const partyTotal = ins.party.reduce((a, b) => a + b.count, 0);
@@ -132,6 +153,46 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
         <div className="panel kpi"><div className="label">평균 예약 시점</div><div className="value">{sum.avgLeadDays ?? "-"}일 전</div></div>
         <div className="panel kpi"><div className="label">취소율</div><div className="value">{pct(sum.cancelled, sum.bookings + sum.cancelled)}</div></div>
       </div>
+
+      {forecast && (
+        <>
+          <h2>연 총매출 4,800만원 예측</h2>
+          <div className="grid two">
+            {forecast.years.map((f) => (
+              <div key={f.year} className="panel forecast">
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <strong>{f.year}년</strong>
+                  <span className={`verdict ${f.verdict}`}>{VERDICT[f.verdict]}</span>
+                </div>
+                <div className="kpi"><div className="label">예상 총매출</div><div className="value">{won(f.expected)}</div></div>
+                <div className="meter" title={`4,800만원의 ${Math.round((f.expected / SALES_THRESHOLD) * 100)}%`}>
+                  <span className="meter-range" style={{ left: `${pctBar(f.low)}%`, width: `${Math.max(1, pctBar(f.high) - pctBar(f.low))}%` }} />
+                  <span className="meter-fill" style={{ width: `${pctBar(f.expected)}%` }} />
+                  <span className="meter-line" style={{ left: `${pctBar(SALES_THRESHOLD)}%` }} />
+                </div>
+                <p className="small muted" style={{ margin: "4px 0 8px" }}>세로선이 4,800만원, 옅은 띠가 예상 범위({man(f.low)}~{man(f.high)})예요.</p>
+                <table className="small">
+                  <tbody>
+                    <tr><td>지금까지 실제 매출</td><td className="num">{won(f.actual)}</td></tr>
+                    <tr><td>이미 들어온 예약</td><td className="num">{won(f.booked)}</td></tr>
+                    <tr><td>4,800만원까지 남은 금액</td><td className="num">{f.actual >= SALES_THRESHOLD ? "이미 넘음" : won(SALES_THRESHOLD - f.actual)}</td></tr>
+                    {f.neededPerMonth !== null && <tr><td>넘으려면 남은 {f.monthsLeft}개월 월 평균</td><td className="num">{won(f.neededPerMonth)}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+          <details className="panel">
+            <summary>어떻게 예측하나요?</summary>
+            <p className="small">
+              총매출은 손님 결제액(수수료 빼기 전, 청소비 포함)이고, 묵은 밤의 달에 나눠 넣어요. 지난 달은 실제 매출, 이번 달부터는 이미 들어온 예약과
+              최근 {forecast.basisMonths.length}개월({forecast.basisMonths[0].replace("-", ".")}~{forecast.basisMonths.at(-1)!.replace("-", ".")}) 월 평균 {won(forecast.monthlyAvg)} 중 큰 값으로 채워요.
+              예상 범위는 그 기간 가장 낮은 달({won(forecast.monthlyLow)})과 높은 달({won(forecast.monthlyHigh)})로 계산했어요.
+              아직 1년 치 자료가 없어 계절 차이는 반영하지 못해요. 트립닷컴은 쿠폰 전 금액이라 실제보다 조금 클 수 있어요. 세금 판단은 세무사와 확인해 주세요.
+            </p>
+          </details>
+        </>
+      )}
 
       <h2>월별 정산액</h2>
       <div className="panel">
