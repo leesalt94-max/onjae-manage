@@ -6,7 +6,8 @@ import type { Channel } from "../lib/types";
 
 export interface CollectorContext {
   page: Page;
-  login: PlatformLogin;
+  /** 서버 자동 로그인용 아이디·비밀번호. 없으면 사장님이 브라우저 창에서 직접 로그인한다. */
+  login?: PlatformLogin;
   /** 2단계 인증 코드를 사장님께 요청하고 입력을 기다린다. 시간이 지나면 null. */
   requestOtp: (prompt: string) => Promise<string | null>;
   log: (msg: string) => void;
@@ -49,6 +50,30 @@ export async function firstVisible(page: Page, candidates: Locator[], timeoutMs 
 
 export function byButton(page: Page, names: RegExp): Locator[] {
   return [page.getByRole("button", { name: names }), page.getByRole("link", { name: names }), page.getByRole("menuitem", { name: names })];
+}
+
+/** 사장님이 열린 브라우저 창에서 직접 로그인할 때까지 기다린다(로봇 확인·인증번호도 사장님이 처리). */
+export async function waitForOwnerLogin(
+  ctx: CollectorContext, label: string, isLoggedIn: () => Promise<boolean>, timeoutMs = 15 * 60_000,
+): Promise<void> {
+  ctx.log(`${label}: 열린 창에서 직접 로그인해 주세요. 로그인이 끝나면 자동으로 이어갑니다 (최대 15분).`);
+  const deadline = Date.now() + timeoutMs;
+  let streak = 0; // 화면이 바뀌는 중에 잘못 판단하지 않도록 두 번 연속 확인한다.
+  while (Date.now() < deadline) {
+    streak = (await isLoggedIn().catch(() => false)) ? streak + 1 : 0;
+    if (streak >= 2) {
+      ctx.log(`${label}: 로그인 확인`);
+      return;
+    }
+    await ctx.page.waitForTimeout(3_000);
+  }
+  throw new CollectorError(`${label} 로그인을 15분 동안 기다렸지만 끝나지 않았습니다. 프로그램을 다시 실행해 주세요.`, true);
+}
+
+/** 서버 자동 로그인에서만 쓰는 아이디·비밀번호. */
+export function requireLogin(ctx: CollectorContext): PlatformLogin {
+  if (!ctx.login) throw new CollectorError("로그인 정보가 없습니다.");
+  return ctx.login;
 }
 
 /** 버튼·링크가 아닌 div 로 만든 메뉴도 있어서, 글자가 정확히 같은 요소까지 후보로 둔다. */

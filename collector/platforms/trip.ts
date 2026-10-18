@@ -1,5 +1,6 @@
 import {
-  assertNoCaptcha, byButton, byText, CollectorError, dismissPopups, downloadText, firstVisible, handleOtpIfAsked,
+  assertNoCaptcha, byButton, byText, CollectorError, dismissPopups, downloadText, firstVisible, handleOtpIfAsked, requireLogin,
+  waitForOwnerLogin,
   type CollectorContext, type PlatformAdapter,
 } from "../helpers";
 
@@ -7,10 +8,17 @@ import {
 const EBOOKING_URL = "https://ebooking.trip.com/";
 
 async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
-  const { page, login } = ctx;
+  const { page } = ctx;
   await page.goto(EBOOKING_URL, { waitUntil: "domcontentloaded" });
   const password = await firstVisible(page, [page.locator('input[type="password"]')], 5_000);
   if (!password) return; // 세션이 살아 있음
+  if (!ctx.login) {
+    await waitForOwnerLogin(ctx, "트립닷컴", async () =>
+      !(await page.locator('input[type="password"]').first().isVisible())
+      && !!(await firstVisible(page, byText(page, /^(reservations|orders|예약|주문)$/i), 1_000)));
+    return;
+  }
+  const login = requireLogin(ctx);
 
   ctx.log("로그인 시작");
   await assertNoCaptcha(page);

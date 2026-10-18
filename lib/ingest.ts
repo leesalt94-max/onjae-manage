@@ -1,11 +1,14 @@
 import type postgres from "postgres";
 import type { Channel, NormalizedReservation } from "./types";
 
+// auto_login: 서버 자동 수집, owner_pc: 사장님 컴퓨터 수집 프로그램, csv_upload: 파일 올리기 화면
+export type ImportSource = "auto_login" | "owner_pc" | "csv_upload";
+
 // 예약을 넣거나 갱신한다. 새 파일에 없는 칸(null)은 기존 값을 지워버리지 않는다.
 export async function upsertReservations(
   sql: postgres.Sql,
   rows: NormalizedReservation[],
-  source: "auto_login" | "csv_upload",
+  source: ImportSource,
 ): Promise<{ inserted: number; updated: number }> {
   let inserted = 0;
   let updated = 0;

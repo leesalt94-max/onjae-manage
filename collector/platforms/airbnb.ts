@@ -1,6 +1,6 @@
 import {
-  assertNoCaptcha, byButton, CollectorError, downloadText, firstVisible, handleOtpIfAsked,
-  type CollectorContext, type PlatformAdapter,
+  assertNoCaptcha, byButton, CollectorError, downloadText, firstVisible, handleOtpIfAsked, OTP_INPUTS, requireLogin,
+  waitForOwnerLogin, type CollectorContext, type PlatformAdapter,
 } from "../helpers";
 
 // 화면 문구·주소는 실제 계정으로 첫 실행 때 확인이 필요하다 (README "첫 실행 점검" 참고).
@@ -16,12 +16,20 @@ const RESERVATIONS_URL = "https://www.airbnb.com/hosting/reservations/all";
 const TRANSACTIONS_URL = "https://www.airbnb.com/users/transaction_history";
 
 async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
-  const { page, login } = ctx;
+  const { page } = ctx;
   await page.goto(RESERVATIONS_URL, { waitUntil: "domcontentloaded" });
   // 로그인 페이지로 이동하거나, 같은 주소에 로그인 창이 뜨는 경우 모두 처리한다.
-  const loginUi = /\/login|\/signup_login/.test(page.url())
-    || (await firstVisible(page, [...EMAIL_INPUTS(page), ...byButton(page, /continue with email|이메일로 계속/i)], 3_000));
-  if (!loginUi) return;
+  const loginUi = async () => /\/login|\/signup_login/.test(page.url())
+    || !!(await firstVisible(page, [...EMAIL_INPUTS(page), ...byButton(page, /continue with email|이메일로 계속/i)], 3_000));
+  if (!(await loginUi())) return;
+  if (!ctx.login) {
+    // 로그인·인증 단계의 입력란이 하나도 안 보이면 끝난 것으로 본다.
+    const stillLoggingIn = [...EMAIL_INPUTS(page), page.locator('input[type="password"]'), ...OTP_INPUTS(page)];
+    await waitForOwnerLogin(ctx, "에어비앤비", async () =>
+      !/\/login|\/signup|authenticat|verif/.test(page.url()) && !(await firstVisible(page, stillLoggingIn, 500)));
+    return;
+  }
+  const login = requireLogin(ctx);
 
   ctx.log("로그인 시작");
   await assertNoCaptcha(page);

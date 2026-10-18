@@ -117,4 +117,28 @@ HMABC123,Canceled by guest,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"�
     const [row] = await sql`SELECT status, code_enc FROM otp_requests ORDER BY id DESC LIMIT 1`;
     expect(row).toMatchObject({ status: "used", code_enc: null });
   });
+
+  it("PC 연결 코드로만 예약 파일을 받고, 새 코드를 만들면 예전 코드는 끊긴다", async () => {
+    const { createPcToken, verifyPcToken } = await import("../lib/pc-token");
+    const { importFiles } = await import("../lib/import-files");
+    const first = await createPcToken(sql);
+    expect(await verifyPcToken(sql, first)).toBe(true);
+    expect(await verifyPcToken(sql, "onjae_wrong")).toBe(false);
+    expect(await verifyPcToken(sql, null)).toBe(false);
+    const second = await createPcToken(sql);
+    expect(await verifyPcToken(sql, first)).toBe(false);
+    expect(await verifyPcToken(sql, second)).toBe(true);
+
+    const csv = "Reservation,Amount,Check-in,Check-out,Booking date,Status,Guest(s)\n"
+      + "PC-TRIP-1,KRW 100000.00,\"Dec 1, 2026\",\"Dec 3, 2026\",\"Oct 1, 2026\",Confirmed,KIM/TEST";
+    const result = await importFiles(sql, "trip", [csv], "owner_pc");
+    expect(result).toMatchObject({ ok: true, inserted: 1 });
+    const [row] = await sql`SELECT source, nights, raw FROM reservations WHERE confirmation = 'PC-TRIP-1'`;
+    expect(row.source).toBe("owner_pc");
+    expect(row.nights).toBe(2);
+    expect(JSON.stringify(row.raw)).not.toContain("KIM");
+    const [run] = await sql`SELECT source, ok FROM sync_runs ORDER BY id DESC LIMIT 1`;
+    expect(run).toMatchObject({ source: "owner_pc", ok: true });
+  });
 });
+

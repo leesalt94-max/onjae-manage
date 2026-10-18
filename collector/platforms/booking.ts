@@ -1,15 +1,20 @@
 import {
-  assertNoCaptcha, byButton, CollectorError, downloadText, firstVisible, handleOtpIfAsked,
-  type CollectorContext, type PlatformAdapter,
+  assertNoCaptcha, byButton, CollectorError, downloadText, firstVisible, handleOtpIfAsked, requireLogin,
+  waitForOwnerLogin, type CollectorContext, type PlatformAdapter,
 } from "../helpers";
 
 // 화면 문구·주소는 실제 계정으로 첫 실행 때 확인이 필요하다 (README "첫 실행 점검" 참고).
 const EXTRANET_URL = "https://admin.booking.com/";
 
 async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
-  const { page, login } = ctx;
+  const { page } = ctx;
   await page.goto(EXTRANET_URL, { waitUntil: "domcontentloaded" });
   if (!/sign-in|login/.test(page.url())) return;
+  if (!ctx.login) {
+    await waitForOwnerLogin(ctx, "부킹닷컴", async () => /admin\.booking\.com\/hotel/.test(page.url()));
+    return;
+  }
+  const login = requireLogin(ctx);
 
   ctx.log("로그인 시작");
   await assertNoCaptcha(page);

@@ -1,9 +1,8 @@
 name: 자동 수집
 
+# 2026-10-18 사장님 결정: 플랫폼이 GitHub 서버 로그인을 로봇으로 보고 막아서, 예약 수집은 사장님 컴퓨터의
+# 수집 프로그램(onjae-collector.bat)으로 옮겼다. 정해진 시간 자동 실행은 끄고, 시험용 수동 실행만 남긴다.
 on:
-  schedule:
-    # 3시간마다 (UTC 기준 분 17). GitHub 사정으로 몇 분~수십 분 늦게 시작될 수 있다.
-    - cron: "17 */3 * * *"
   workflow_dispatch:
     inputs:
       channel:

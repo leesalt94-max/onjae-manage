@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "./lib/session";
 
-// 로그인 화면과 첫 설정 화면만 공개 (설정 화면은 관리자 비밀번호가 등록되면 스스로 닫힌다).
-const PUBLIC_PREFIXES = ["/login", "/setup"];
+// 로그인 화면과 첫 설정 화면은 공개 (설정 화면은 관리자 비밀번호가 등록되면 스스로 닫힌다).
+// /api/collector 는 쿠키 대신 PC 연결 코드로 직접 확인한다.
+const PUBLIC_PREFIXES = ["/login", "/setup", "/api/collector"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

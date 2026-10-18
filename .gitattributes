@@ -1,0 +1,2 @@
+# 윈도우 cmd 는 LF 줄바꿈 배치 파일을 잘못 읽을 수 있어 CRLF 그대로 저장한다 (GitHub ZIP 에도 그대로 들어감).
+*.bat -text

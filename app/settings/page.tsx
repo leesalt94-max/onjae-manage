@@ -2,10 +2,12 @@ import { requireOwner } from "@/lib/auth";
 import { listCredentialStatus } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { isKakaoConnected } from "@/lib/kakao";
+import { hasPcToken } from "@/lib/pc-token";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
 import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, toggleCredentialAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
+import { PcTokenForm } from "./pc-token";
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +15,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   await requireOwner();
   const params = await searchParams;
   const sql = db();
-  const [creds, kakao] = await Promise.all([listCredentialStatus(sql), isKakaoConnected(sql)]);
+  const [creds, kakao, pcToken] = await Promise.all([listCredentialStatus(sql), isKakaoConnected(sql), hasPcToken(sql)]);
 
   return (
     <OwnerShell>
       <h1>설정</h1>
       <Flash params={params} />
 
-      <h2>플랫폼 로그인 정보</h2>
+      <h2>내 컴퓨터 수집 프로그램</h2>
+      <div className="panel">
+        <p className="muted">
+          사장님 컴퓨터에서 크롬 창을 열어 직접 로그인하면 세 플랫폼의 예약을 가져와 이 사이트로 보냅니다. 프로그램이 이
+          사이트에 파일을 보낼 때 아래 연결 코드를 씁니다.
+        </p>
+        <PcTokenForm hasToken={pcToken} />
+      </div>
+
+      <h2>서버 자동 로그인 (사용 안 함)</h2>
       <p className="muted">
-        비밀번호는 AES-256 으로 암호화해 저장하고, 화면에 다시 보여주지 않습니다. 자동 로그인은 플랫폼 약관상 계정 제한
-        위험이 있다는 점을 알고 사용합니다.
+        GitHub 서버에서 로그인하면 플랫폼이 로봇으로 보고 막아서, 지금은 내 컴퓨터 수집 프로그램을 씁니다. 여기 저장한
+        아이디·비밀번호는 쓰이지 않으니 삭제해도 됩니다.
       </p>
       {CHANNELS.map((ch) => {
         const c = creds.find((x) => x.channel === ch);

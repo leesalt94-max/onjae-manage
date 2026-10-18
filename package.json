@@ -12,7 +12,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "collect": "tsx collector/run.ts",
     "hash-password": "tsx scripts/hash-password.ts",
-    "gen-key": "tsx scripts/gen-key.ts"
+    "gen-key": "tsx scripts/gen-key.ts",
+    "local": "tsx collector/local.ts"
   },
   "engines": {
     "node": ">=20"
