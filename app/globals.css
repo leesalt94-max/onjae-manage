@@ -130,11 +130,11 @@ tr.muted td { color: var(--muted); }
 .card .top { display: flex; justify-content: space-between; gap: 8px; }
 @media (max-width: 640px) {
   main { padding: 12px; }
-  /* 휴대폰 메뉴: 손가락으로 누르기 쉬운 3칸 x 2줄 버튼 */
+  /* 휴대폰 메뉴: 손가락으로 누르기 쉬운 4칸 한 줄 버튼 */
   header.top { padding: 10px 12px; gap: 8px; }
   header.top strong { font-size: 17px; }
   header.top .logout button { padding: 6px 10px; font-size: 14px; }
-  header.top nav { order: 3; width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  header.top nav { order: 3; width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   header.top nav a { font-size: 16px; text-align: center; padding: 10px 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
   header.top nav a.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .kpi .value { font-size: 18px; }
@@ -178,3 +178,4 @@ a.card-link .link { color: var(--accent); }
 .meter-range { position: absolute; top: 0; bottom: 0; background: var(--series-1); opacity: 0.25; }
 .meter-fill { position: absolute; left: 0; top: 4px; bottom: 4px; background: var(--series-1); border-radius: 0 3px 3px 0; }
 .meter-line { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+.button-link { display: inline-block; padding: 8px 14px; border-radius: 8px; background: var(--accent); color: #fff; text-decoration: none; }

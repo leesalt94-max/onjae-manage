@@ -27,6 +27,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <h1>설정</h1>
       <Flash params={params} />
 
+      <div className="panel">
+        <a className="button-link" href="/upload">파일 올리기</a>
+        <p className="muted small" style={{ margin: "8px 0 0" }}>
+          수집 프로그램이 막힌 플랫폼(예: 부킹닷컴)은 예약 파일을 직접 내려받아 여기서 올려 주세요.
+        </p>
+        <p className="muted small" style={{ margin: "8px 0 0" }}>
+          <a href="/otp">인증번호 입력</a> · 플랫폼에 처음 로그인할 때 1회만 필요해요. 필요할 때는 홈에 알림이 떠요.
+        </p>
+      </div>
+
       <h2>객실 수</h2>
       <div className="panel">
         <p className="muted">동시에 받을 수 있는 객실(유닛) 수입니다. 통계의 가동률을 이 숫자로 나눠 계산합니다.</p>
