@@ -8,7 +8,7 @@ const row = (channel: StayRow["channel"], checkIn: string, checkOut: string, pay
 });
 
 describe("통계 인사이트", () => {
-  it("같은 밤에 겹친 예약은 가동률에서 한 번만 세고 알려 준다", () => {
+  it("같은 밤에 겹친 예약은 가동률에서 한 번만 센다", () => {
     const ins = buildInsights([
       row("airbnb", "2026-10-02", "2026-10-03", 100_000), // 금
       row("booking", "2026-10-02", "2026-10-04", 300_000), // 금·토, 금요일이 겹침
@@ -18,8 +18,7 @@ describe("통계 인사이트", () => {
     expect(ins.past.occupancy).toBeCloseTo(2 / 7);
     expect(ins.months[0].occupied).toBe(2);
     expect(ins.overlaps).toEqual([{ date: "2026-10-02", channels: ["airbnb", "booking"] }]);
-    expect(ins.notes[0]).toMatchObject({ tag: "겹친 예약" });
-    expect(ins.notes[0].text).toContain("10/2(금) 에어비앤비·부킹닷컴");
+    expect(ins.notes.some((n) => n.tag === "겹친 예약")).toBe(false); // 분석 내용에는 안 띄운다 (사장님 2026-10-18)
   });
 
   it("정산액을 숙박한 밤에 나눠 월·요일·채널별로 모은다", () => {

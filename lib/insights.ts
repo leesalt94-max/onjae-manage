@@ -217,12 +217,6 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
   const notes = notesFor(chList, weekdays, lead, stay, monthList, thisMonth, roomCount, pastStays, opts.rates ?? RATE_DEFAULTS);
   // 앞으로 30일: 기간 끝이 오늘 이후일 때만 (지난 기간만 볼 때는 의미 없다)
   if (toD > todayD) notes.push(...aheadNotes(rows, today, roomCount));
-  if (overlaps.length) {
-    const label: Record<Channel, string> = { airbnb: "에어비앤비", booking: "부킹닷컴", trip: "트립닷컴" };
-    const day = (k: string) => `${Number(k.slice(5, 7))}/${Number(k.slice(8))}(${WEEKDAYS[toDate(k).getUTCDay()]})`;
-    const list = overlaps.slice(0, 6).map((o) => `${day(o.date)} ${o.channels.map((c) => label[c]).join("·")}`).join(", ");
-    notes.unshift({ tag: "겹친 예약", tone: "warn", text: `같은 밤에 예약이 겹친 날이 ${overlaps.length}일 있어요: ${list}${overlaps.length > 6 ? " 등" : ""}. 가동률은 하루 한 번만 세고 정산액은 모두 더했어요. 실제로 취소된 예약이면 예약 화면에서 취소로 표시해 주세요.` });
-  }
   return { months: monthList, past, channels: chList, weekdays, lead, stay, party, overlaps, notes };
 }
 
