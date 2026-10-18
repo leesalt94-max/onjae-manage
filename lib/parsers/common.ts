@@ -102,7 +102,7 @@ export function parseAmount(value: string | null): number | null {
 
 // 사장님 결정(2026-10-18): 게스트 정보는 성별·인원수·나이만 모은다.
 // 그래서 원본 행을 보관할 때 이름·연락처·주소·국적 같은 칸은 지운다.
-const PERSONAL = /name|guest$|guest\W+s\b|booked by|remarks|request|details|비고|요청|phone|contact|e-?mail|address|country|national|이름|게스트|투숙객|전화|연락처|이메일|주소|국가|국적|入住人|国籍|电话|联系人/i;
+const PERSONAL = /name|guest$|guest\W+s\b|booked by|remarks|request|details|비고|요청|phone|contact|e-?mail|address|country|national|이름|고객|확인자|주의사항|게스트|투숙객|전화|연락처|이메일|주소|국가|국적|入住人|国籍|电话|联系人/i;
 
 export function stripPersonal(row: Row): Row {
   return Object.fromEntries(Object.entries(row).filter(([k]) => !PERSONAL.test(k)));

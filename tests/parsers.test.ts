@@ -143,3 +143,20 @@ describe("옛 엑셀(xls) 내보내기", () => {
     expect(lines[399]).toBe("TRIP0399,손님399번 한글이름 테스트 문자열,2026-11-08,399");
   });
 });
+
+describe("트립닷컴 한국어 화면 내보내기", () => {
+  it("2026-10 실제 헤더로 예약을 읽고 고객명·비고는 버린다", () => {
+    const csv = `도시,호텔명,예약 번호,결제수단,예약 타입,예약 상태,방ID,객실명,일일 식사,고객명,요금제명,예약 날짜,체크인 날짜,체크 아웃 날짜,투숙 박수,예약 날짜,알림 시간,객실 수량,통화 종류,객실 입금가,객실 판매가,프로모션,확인 타입,호텔 확인자,호텔 예약 확정번호,비고,비고 확인,주의사항
+서울,온재,1234567890,선결제,일반,확정,1,디럭스,없음,HONG GILDONG,기본,2026-10-01,2026-11-01,2026-11-03,2,2026-10-01,,1,KRW,170000,200000,,,,,늦게 도착,,`;
+    const { reservations } = parseExport("trip", csv);
+    expect(reservations).toHaveLength(1);
+    const r = reservations[0];
+    expect(r.confirmation).toBe("1234567890");
+    expect(r.checkIn).toBe("2026-11-01");
+    expect(r.checkOut).toBe("2026-11-03");
+    expect(r.bookedAt).toBe("2026-10-01");
+    expect(r.listing).toBe("디럭스");
+    expect(r.currency).toBe("KRW");
+    expect(JSON.stringify(r)).not.toMatch(/HONG|늦게/);
+  });
+});

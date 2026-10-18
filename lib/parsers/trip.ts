@@ -4,27 +4,28 @@ import {
 } from "./common";
 
 // 트립닷컴 이부킹(ebooking) 주문 내보내기. 실제 파일을 아직 보지 못해 영어·중국어·한국어 헤더를 넓게 받는다.
-// 첫 실제 파일을 받으면 헤더를 확인해 여기 별칭을 보강해야 한다.
+// 2026-10 한국어 화면 실제 파일(xls) 헤더: 예약 번호, 예약 상태, 객실명, 예약 날짜, 체크인 날짜, 체크 아웃 날짜, 투숙 박수,
+// 통화 종류, 객실 입금가(정산), 객실 판매가 등. 인원 열은 없다.
 const T = {
-  confirmation: ["Reservation", "Reservation no.", "Reservation No.", "Order ID", "Order No.", "Booking No.", "订单号", "주문번호", "예약번호"],
-  checkIn: ["Check-in", "Check-in date", "Arrival date", "入住日期", "체크인"],
-  checkOut: ["Check-out", "Check-out date", "Departure date", "离店日期", "체크아웃"],
-  booked: ["Booking date", "Order date", "预订日期", "下单时间", "예약일"],
-  status: ["Status", "Order status", "订单状态", "상태"],
+  confirmation: ["Reservation", "Reservation no.", "Reservation No.", "Order ID", "Order No.", "Booking No.", "订单号", "주문번호", "예약번호", "예약 번호"],
+  checkIn: ["Check-in", "Check-in date", "Arrival date", "入住日期", "체크인", "체크인 날짜"],
+  checkOut: ["Check-out", "Check-out date", "Departure date", "离店日期", "체크아웃", "체크 아웃 날짜", "체크아웃 날짜"],
+  booked: ["Booking date", "Order date", "预订日期", "下单时间", "예약일", "예약 날짜"],
+  status: ["Status", "Order status", "订单状态", "상태", "예약 상태"],
   adults: ["Adults", "成人", "성인"],
   children: ["Children", "儿童", "아동"],
   guests: ["Guests", "人数", "인원"],
-  roomNights: ["Room nights", "Nights", "间夜", "숙박일수"],
-  total: ["Amount", "Total price", "Total amount", "Selling price", "总价", "판매가"],
-  settlement: ["Settlement amount", "Payable amount", "Net price", "结算价", "结算金额", "정산금액"],
+  roomNights: ["Room nights", "Nights", "间夜", "숙박일수", "투숙 박수"],
+  total: ["Amount", "Total price", "Total amount", "Selling price", "总价", "판매가", "객실 판매가"],
+  settlement: ["Settlement amount", "Payable amount", "Net price", "结算价", "结算金额", "정산금액", "객실 입금가"],
   commission: ["Commission", "佣金", "수수료"],
-  currency: ["Currency", "币种", "통화"],
-  room: ["Room type", "房型", "객실"],
+  currency: ["Currency", "币种", "통화", "통화 종류"],
+  room: ["Room type", "房型", "객실", "객실명"],
 };
 
 function mapStatus(value: string | null): ReservationStatus {
   const v = (value ?? "").toLowerCase();
-  if (v.includes("no show") || v.includes("noshow") || v.includes("未入住")) return "no_show";
+  if (v.includes("no show") || v.includes("noshow") || v.includes("未入住") || v.includes("노쇼")) return "no_show";
   if (v.includes("cancel") || v.includes("取消") || v.includes("취소")) return "cancelled";
   if (v.includes("complete") || v.includes("离店") || v.includes("완료")) return "completed";
   return "confirmed";
