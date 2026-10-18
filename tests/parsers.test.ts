@@ -129,3 +129,17 @@ describe("엑셀(xlsx) 내보내기", () => {
     expect(JSON.stringify(r.raw)).not.toContain("KIM");
   });
 });
+
+describe("옛 엑셀(xls) 내보내기", () => {
+  it("공유 문자열이 여러 조각으로 나뉜 파일도 첫 시트를 CSV 로 바꾼다", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { isXls, xlsToCsv } = await import("../lib/parsers/xls");
+    const buf = readFileSync(new URL("./fixtures/trip-sample.xls", import.meta.url));
+    expect(isXls(buf)).toBe(true);
+    const lines = xlsToCsv(buf).split("\n");
+    expect(lines[0]).toBe("주문번호,이름,체크인,금액");
+    expect(lines[1]).toBe('TRIP0001,"Kim, A",2026-11-01,123.45');
+    expect(lines).toHaveLength(400);
+    expect(lines[399]).toBe("TRIP0399,손님399번 한글이름 테스트 문자열,2026-11-08,399");
+  });
+});

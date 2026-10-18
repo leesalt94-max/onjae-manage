@@ -107,7 +107,10 @@ async function main() {
           log: (msg) => log(`[${label}] ${msg}`),
           requestOtp: async () => null, // 인증번호는 사장님이 창에서 직접 넣는다
         });
-        const r = await send(config, channel, files);
+        // 파일 형식이 바뀌어 한 건도 못 읽으면 고칠 수 있게 첫 줄(열 이름)만 보여 준다. 손님 정보는 담기지 않는다.
+        const showHeader = () => log(`[${label}] 받은 파일의 열 이름: ${files[0]?.split(/\r?\n/)[0] ?? "(빈 파일)"}`);
+        const r = await send(config, channel, files).catch((err) => { showHeader(); throw err; });
+        if (!r.inserted && !r.updated) showHeader();
         results.push(`${label}: 새 예약 ${r.inserted ?? 0}건, 갱신 ${r.updated ?? 0}건`);
       } catch (err) {
         const message = err instanceof CollectorError ? err.message : (err as Error).message.split("\n")[0];

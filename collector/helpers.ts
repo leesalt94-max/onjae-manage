@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { Download, Locator, Page } from "playwright";
+import { isXls, xlsToCsv } from "../lib/parsers/xls";
 import { xlsxToCsv } from "../lib/parsers/xlsx";
 import type { PlatformLogin } from "../lib/credentials";
 import type { Channel } from "../lib/types";
@@ -147,9 +148,7 @@ export async function downloadText(page: Page, trigger: () => Promise<void>, tim
   const filePath = await download.path();
   if (!filePath) throw new CollectorError("내보내기 파일을 받지 못했습니다.");
   const buf = await readFile(filePath);
-  if (buf[0] === 0xd0 && buf[1] === 0xcf) {
-    throw new CollectorError("옛 엑셀(xls) 형식으로 내려받아졌습니다. CSV 나 xlsx 형식 선택이 필요합니다.");
-  }
+  if (isXls(buf)) return xlsToCsv(buf);
   if (buf[0] === 0x50 && buf[1] === 0x4b) return xlsxToCsv(buf);
   return buf.toString("utf8");
 }

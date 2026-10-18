@@ -9,6 +9,7 @@ import { importFiles } from "@/lib/import-files";
 import { sendKakao } from "@/lib/kakao";
 import { guestsFromForm, MAX_GUESTS, saveGuestProfiles } from "@/lib/guests";
 import { answerOtp } from "@/lib/otp";
+import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
 import { createPcToken } from "@/lib/pc-token";
 import { CHANNELS } from "@/lib/types";
@@ -72,9 +73,9 @@ export async function uploadAction(formData: FormData) {
   }
   if (file.size > 10 * 1024 * 1024) back("/upload", "파일이 너무 큽니다 (10MB 이하).", "error");
 
-  // 트립닷컴처럼 엑셀(xlsx)로만 주는 곳도 있어 CSV 로 바꿔 읽는다.
+  // 트립닷컴처럼 엑셀(xls·xlsx)로만 주는 곳도 있어 CSV 로 바꿔 읽는다.
   const buf = Buffer.from(await file.arrayBuffer());
-  const text = buf[0] === 0x50 && buf[1] === 0x4b ? await xlsxToCsv(buf) : buf.toString("utf8");
+  const text = isXls(buf) ? xlsToCsv(buf) : buf[0] === 0x50 && buf[1] === 0x4b ? await xlsxToCsv(buf) : buf.toString("utf8");
   const result = await importFiles(db(), channel.data, [text], "csv_upload");
   if (!result.ok) back("/upload", result.error ?? "읽을 수 있는 예약이 없습니다.", "error");
   back("/upload", `새 예약 ${result.inserted}건, 갱신 ${result.updated}건, 건너뛴 행 ${result.skipped}개`);

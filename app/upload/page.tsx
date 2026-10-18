@@ -20,8 +20,8 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
           </select>
         </label>
         <label>
-          CSV·엑셀(xlsx) 파일
-          <input type="file" name="file" accept=".csv,.xlsx,text/csv" required />
+          CSV·엑셀(xls, xlsx) 파일
+          <input type="file" name="file" accept=".csv,.xls,.xlsx,text/csv" required />
         </label>
         <button type="submit">올리기</button>
       </form>
