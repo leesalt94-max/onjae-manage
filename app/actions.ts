@@ -92,11 +92,16 @@ export async function saveRoomCountAction(formData: FormData) {
 
 export async function saveTripCommissionAction(formData: FormData) {
   await requireOwner();
-  const raw = String(formData.get("tripCommissionPct") ?? "").trim();
-  const n = Number(raw);
-  if (raw !== "" && !(Number.isFinite(n) && n > 0 && n < 100)) back("/settings", "수수료율은 0보다 크고 100보다 작은 숫자로 넣어 주세요.", "error");
-  await setSetting(db(), "trip_commission_pct", raw);
-  back("/settings", raw ? `트립닷컴 수수료율을 ${n}%로 저장했습니다. 통계에 바로 반영됩니다.` : "트립닷컴 수수료율을 비웠습니다.");
+  const pctRaw = String(formData.get("tripCommissionPct") ?? "").trim();
+  const feeRaw = String(formData.get("tripCleaningFee") ?? "").trim();
+  const pct = Number(pctRaw);
+  const fee = Number(feeRaw);
+  if (pctRaw !== "" && !(Number.isFinite(pct) && pct > 0 && pct < 100)) back("/settings", "수수료율은 0보다 크고 100보다 작은 숫자로 넣어 주세요.", "error");
+  if (feeRaw !== "" && !(Number.isFinite(fee) && fee >= 0)) back("/settings", "청소비는 0 이상의 숫자로 넣어 주세요.", "error");
+  const sql = db();
+  await setSetting(sql, "trip_commission_pct", pctRaw);
+  await setSetting(sql, "trip_cleaning_fee", feeRaw);
+  back("/settings", pctRaw ? `트립닷컴 수수료율 ${pct}%, 청소비 ${feeRaw || 0}원으로 저장했습니다. 통계에 바로 반영됩니다.` : "트립닷컴 역산을 껐습니다.");
 }
 
 export async function kakaoTestAction() {

@@ -3,7 +3,7 @@ import { listCredentialStatus } from "@/lib/credentials";
 import { db } from "@/lib/db";
 import { isKakaoConnected } from "@/lib/kakao";
 import { hasPcToken } from "@/lib/pc-token";
-import { getRoomCount, getTripCommissionPct } from "@/lib/stats";
+import { getRoomCount, getTripCleaningFee, getTripCommissionPct } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
 import { deleteCredentialAction, kakaoTestAction, saveCredentialAction, saveRoomCountAction, saveTripCommissionAction, toggleCredentialAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
@@ -16,8 +16,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   await requireOwner();
   const params = await searchParams;
   const sql = db();
-  const [creds, kakao, pcToken, roomCount, tripPct] = await Promise.all([
+  const [creds, kakao, pcToken, roomCount, tripPct, tripCleaning] = await Promise.all([
     listCredentialStatus(sql), isKakaoConnected(sql), hasPcToken(sql), getRoomCount(sql), getTripCommissionPct(sql),
+    getTripCleaningFee(sql),
   ]);
 
   return (
@@ -34,15 +35,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
         </form>
       </div>
 
-      <h2>트립닷컴 수수료율</h2>
+      <h2>트립닷컴 수수료율·청소비</h2>
       <div className="panel">
         <p className="muted">
-          트립닷컴 선결제 예약은 파일에 입금가(정산액)만 있습니다. 계약 수수료율을 넣으면 판매가 = 입금가 ÷ (1 − 수수료율)로
-          역산해 통계의 결제액·수수료·실수익률에 씁니다. 비워 두면 역산하지 않습니다.
+          트립닷컴 선결제 예약은 파일에 입금가(정산액)만 있습니다. 수수료는 객실 요금에만 붙고 청소비는 그대로 들어오므로,
+          객실 판매가 = (입금가 − 청소비) ÷ (1 − 수수료율)로 역산해 통계의 결제액·수수료·실수익률에 씁니다. 수수료율을 비워 두면
+          역산하지 않습니다.
         </p>
         <form action={saveTripCommissionAction} className="row">
           <input type="number" name="tripCommissionPct" min={0.1} max={99.9} step={0.1} defaultValue={tripPct ?? ""} placeholder="예: 15" style={{ width: 100 }} />
           <span>%</span>
+          <span style={{ marginLeft: 12 }}>예약당 청소비</span>
+          <input type="number" name="tripCleaningFee" min={0} step={1000} defaultValue={tripCleaning || ""} placeholder="예: 50000" style={{ width: 120 }} />
+          <span>원</span>
           <button type="submit">저장</button>
         </form>
       </div>

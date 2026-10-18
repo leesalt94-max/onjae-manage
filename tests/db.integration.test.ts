@@ -94,7 +94,13 @@ TRIPRATE1,확인함,${day(1)},${day(3)},2,KRW,85000.00,`);
     expect(await tripRow()).toMatchObject({ payout: 85000, guestPaid: 0, commission: 0 });
     await setSetting(sql, "trip_commission_pct", "15");
     expect(await tripRow()).toMatchObject({ payout: 85000, guestPaid: 100000, commission: 15000 });
+    // 청소비 30,000 은 수수료 없이 그대로: 객실 입금 55,000 ÷ 0.85 ≈ 64,706 + 30,000
+    await setSetting(sql, "trip_cleaning_fee", "30000");
+    const row = await tripRow();
+    expect(row.guestPaid).toBeCloseTo(94705.88, 1);
+    expect(row.commission).toBeCloseTo(9705.88, 1);
     await setSetting(sql, "trip_commission_pct", "");
+    await setSetting(sql, "trip_cleaning_fee", "");
   });
 
   it("사장님이 입력한 투숙객 정보는 예약마다 통째로 바뀌고, 비우면 미입력이 된다", async () => {

@@ -81,7 +81,7 @@ describe("부킹닷컴", () => {
     const { reservations } = parseExport("booking", BOOKING);
     expect(reservations[0]).toMatchObject({
       confirmation: "4012345678", status: "confirmed", adults: 2, children: 1, nights: 2,
-      guestPaid: 240000, commission: 36000, payoutAmount: 204000, currency: "KRW", listing: "Double Room",
+      guestPaid: 240000, commission: 42000, payoutAmount: 198000, // 15% + 결제 수수료 2.5% currency: "KRW", listing: "Double Room",
     });
     expect(reservations[0].raw).not.toHaveProperty("guest name s");
     expect(reservations[0].raw).not.toHaveProperty("remarks");
@@ -173,5 +173,16 @@ describe("부킹닷컴 한국어 화면 내보내기", () => {
     });
     expect(reservations[1].status).toBe("cancelled");
     expect(JSON.stringify(reservations)).not.toMatch(/HONG|KIM|늦게|Seoul|\+82/);
+  });
+});
+
+describe("부킹닷컴 결제 서비스 수수료", () => {
+  it("Booking.com 이 결제한 예약은 수수료 15%에 결제 수수료 2.5%를 더해 입금액을 맞춘다", () => {
+    const csv = `예약 번호,체크인,체크아웃,예약 상태,요금,수수료율,수수료 금액,결제 상태
+1000000003,2026-09-22,2026-09-23,ok,134645 KRW,15,20196.75 KRW,Booking.com을 통한 결제
+1000000004,2026-09-24,2026-09-25,ok,100000 KRW,15,15000 KRW,`;
+    const { reservations } = parseExport("booking", csv);
+    expect(Math.round(reservations[0].payoutAmount!)).toBe(111082);
+    expect(reservations[1].payoutAmount).toBe(85000);
   });
 });

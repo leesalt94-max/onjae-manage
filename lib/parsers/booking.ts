@@ -19,6 +19,7 @@ const B = {
   currency: ["Currency", "통화"],
   cancelled: ["Cancellation date", "취소일"],
   unit: ["Unit type", "Room type", "객실 유형"],
+  payment: ["Payment status", "결제 상태"],
   nights: ["Duration (nights)", "Nights", "박", "숙박일수(박)"],
 };
 
@@ -27,6 +28,15 @@ function mapStatus(value: string | null): ReservationStatus {
   if (v.includes("no_show") || v.includes("no show") || v.includes("노쇼")) return "no_show";
   if (v.includes("cancel") || v.includes("취소")) return "cancelled";
   return "confirmed";
+}
+
+// Booking.com 이 결제를 대행한 예약(결제 상태 "Booking.com을 통한 결제" / "Paid online")은 수수료와 별도로
+// 결제 서비스 수수료 2.5%(청소비 포함 총액 기준)가 더 빠진다. 파일에는 없어 직접 계산한다.
+// 2026-10 사장님 확인: 134,645 × (15% + 2.5%) 공제 → 입금액 111,082 원으로 화면과 일치.
+export const BOOKING_PAYMENTS_FEE_PCT = 2.5;
+
+function paidThroughBooking(value: string | null): boolean {
+  return /booking\.com|paid online|online payment/i.test(value ?? "");
 }
 
 export function parseBooking(rows: Row[]): ParseResult {
@@ -47,6 +57,9 @@ export function parseBooking(rows: Row[]): ParseResult {
     if (commission === null && price !== null) {
       const pct = parseAmount(pick(row, B.commissionPct));
       if (pct !== null) commission = Math.round(price * pct) / 100;
+    }
+    if (commission !== null && price !== null && paidThroughBooking(pick(row, B.payment))) {
+      commission = Math.round((commission + (price * BOOKING_PAYMENTS_FEE_PCT) / 100) * 100) / 100;
     }
     const adults = parseIntOrNull(pick(row, B.adults)) ?? parseIntOrNull(pick(row, B.people));
 

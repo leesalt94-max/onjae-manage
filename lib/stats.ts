@@ -20,21 +20,31 @@ export interface MonthlyChannelRow {
   payout: number;
 }
 
-// 트립닷컴 선결제는 입금가(정산액)만 알려 준다. 사장님이 설정에 넣은 수수료율(%)로 판매가를 역산한다:
-// 판매가 = 입금가 ÷ (1 − 수수료율), 수수료 = 판매가 − 입금가. 비어 있으면 역산하지 않는다.
+// 트립닷컴 선결제는 입금가(정산액)만 알려 준다. 수수료는 객실 요금에만 붙고 청소비는 그대로 들어온다
+// (2026-10 사장님 확인). 그래서 설정의 수수료율·예약당 청소비로 역산한다:
+// 객실 판매가 = (입금가 − 청소비) ÷ (1 − 수수료율), 결제액 = 객실 판매가 + 청소비, 수수료 = 결제액 − 입금가.
+// 수수료율이 비어 있으면 역산하지 않는다.
 export async function getTripCommissionPct(sql: postgres.Sql): Promise<number | null> {
   const n = Number((await getSetting(sql, "trip_commission_pct")) ?? "");
   return Number.isFinite(n) && n > 0 && n < 100 ? n : null;
 }
 
+export async function getTripCleaningFee(sql: postgres.Sql): Promise<number> {
+  const n = Number((await getSetting(sql, "trip_cleaning_fee")) ?? "");
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 // 체크인 월 기준, 취소·노쇼 제외.
 export async function monthlyByChannel(sql: postgres.Sql, months = 12): Promise<MonthlyChannelRow[]> {
-  const tripRate = (await getTripCommissionPct(sql)) ?? 0;
+  const [tripPct, cleaning] = await Promise.all([getTripCommissionPct(sql), getTripCleaningFee(sql)]);
+  const tripRate = tripPct ?? 0;
   return sql<MonthlyChannelRow[]>`
     WITH r AS (
       SELECT *,
              CASE WHEN channel = 'trip' AND ${tripRate}::numeric > 0 AND guest_paid IS NULL AND commission IS NULL
-                  THEN payout_amount / (1 - ${tripRate}::numeric / 100) END AS trip_gross
+                  THEN least(${cleaning}::numeric, payout_amount)
+                       + (payout_amount - least(${cleaning}::numeric, payout_amount)) / (1 - ${tripRate}::numeric / 100)
+             END AS trip_gross
       FROM reservations
       WHERE status IN ('confirmed', 'completed')
         AND check_in >= date_trunc('month', CURRENT_DATE) - make_interval(months => ${months - 1})
