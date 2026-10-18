@@ -122,6 +122,10 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
         <span><strong>청소 매니저</strong> <span className="muted small">청소 일정 달력</span></span>
         <a className="button-link" href="https://onjae-calendar.vercel.app/" target="_blank" rel="noopener noreferrer">열기 ↗</a>
       </div>
+      <div className="panel row" style={{ justifyContent: "space-between" }}>
+        <span><strong>요금 계산기</strong> <span className="muted small">채널별 게시가·순수익</span></span>
+        <a className="button-link" href="https://ota-pricing-calculator.vercel.app/" target="_blank" rel="noopener noreferrer">열기 ↗</a>
+      </div>
     </OwnerShell>
   );
 }
