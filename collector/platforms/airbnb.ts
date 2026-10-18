@@ -87,9 +87,15 @@ async function exportEarnings(ctx: CollectorContext, tab: RegExp, name: string):
   if (!exportButton) throw new CollectorError(`에어비앤비 '${name}' 화면에서 CSV 내보내기 버튼을 찾지 못했습니다.`);
   return downloadText(page, async () => {
     await exportButton.click();
-    // 기간·형식을 고르는 창이 뜨면 그 안의 내보내기·다운로드 버튼을 누른다.
+    // 2026-10 기준 "Export transactions" 창: "Download CSV"(이메일 보내기 말고)를 고르고 아래 "Export CSV" 를 누른다.
+    const dialog = page.locator('[role="dialog"]:visible').last();
+    const option = await firstVisible(page, [
+      dialog.getByText(/^(download csv|csv 다운로드)$/i),
+      dialog.getByRole("radio", { name: /download|다운로드/i }),
+    ], 5_000);
+    if (option) await option.click();
     const confirm = await firstVisible(page, [
-      page.locator('[role="dialog"]').getByRole("button", { name: /export|download|내보내기|다운로드/i }),
+      dialog.getByRole("button", { name: /^(export csv|csv 내보내기|내보내기|export)$/i }),
     ], 3_000);
     if (confirm) await confirm.click();
   });

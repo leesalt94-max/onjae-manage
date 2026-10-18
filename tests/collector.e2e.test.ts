@@ -14,9 +14,15 @@ const UPCOMING_CSV = `Date,Type,Confirmation code,Booking date,Start date,End da
 11/07/2026,Reservation,HMTEST02,10/01/2026,11/06/2026,11/07/2026,1,Kim,Room,KRW,166676,5000`;
 
 // 화면 안 글자를 파일로 내려받게 하는 버튼 (Playwright 가짜 응답은 다운로드를 직접 못 만들어서 브라우저 안에서 만든다).
-const exportButton = (id: string) => `<button onclick="const a = document.createElement('a');
-  a.href = window.URL.createObjectURL(new Blob([document.getElementById('${id}').textContent], { type: 'text/csv' }));
-  a.download = '${id}.csv'; document.body.appendChild(a); a.click();">CSV 내보내기</button>`;
+// 실제처럼 "CSV 내보내기" → "Export transactions" 창 → "Download CSV" 고르기 → "Export CSV" 순서로만 받아진다.
+const exportButton = (id: string) => `<button onclick="document.getElementById('dlg-${id}').style.display='block'">CSV 내보내기</button>
+  <div role="dialog" id="dlg-${id}" style="display:none"><h2>Export transactions</h2>
+    <div onclick="this.dataset.on='1'" id="opt-${id}">Download CSV</div><div>Send by email</div>
+    <button>Cancel</button>
+    <button onclick="if (!document.getElementById('opt-${id}').dataset.on) return;
+      const a = document.createElement('a');
+      a.href = window.URL.createObjectURL(new Blob([document.getElementById('${id}').textContent], { type: 'text/csv' }));
+      a.download = '${id}.csv'; document.body.appendChild(a); a.click(); document.getElementById('dlg-${id}').style.display='none';">Export CSV</button></div>`;
 
 const page = (body: string) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
 
