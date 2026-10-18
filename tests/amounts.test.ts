@@ -8,6 +8,15 @@ describe("예약 금액 역산", () => {
     expect(a).toMatchObject({ guestPaid: 430729, commission: 57109, payout: 373620, estimated: true });
   });
 
+  it("트립닷컴 11/11 예: 223,000 − 회원 특가 25% − 특별 할인 = 판매가 152,862 → 입금 179,933", () => {
+    const sale = 223_000 - 55_750 - 14_388;
+    const payout = Math.round(sale * 0.85 + 50_000);
+    const a = computeAmounts({ channel: "trip", guest_paid: null, commission: null, payout_amount: payout });
+    expect(a.commission).toBe(Math.round(sale * 0.15));
+    // 손님은 트립 쿠폰 8,700 을 더 할인받아 194,162 를 냈다 (쿠폰은 트립 부담).
+    expect(a.guestPaid! - 8_700).toBe(194_162);
+  });
+
   it("에어비앤비: 결제액 = 정산액 + 수수료", () => {
     const a = computeAmounts({ channel: "airbnb", guest_paid: null, commission: "278380", payout_amount: "1517620" });
     expect(a).toMatchObject({ guestPaid: 1796000, commission: 278380, estimated: true });
