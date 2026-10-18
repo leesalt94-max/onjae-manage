@@ -1,5 +1,5 @@
 import {
-  assertNoCaptcha, byButton, CollectorError, downloadText, firstVisible, handleOtpIfAsked, OTP_INPUTS, requireLogin,
+  assertNoCaptcha, byButton, byText, CollectorError, downloadText, firstVisible, handleOtpIfAsked, OTP_INPUTS, requireLogin,
   waitForOwnerLogin, type CollectorContext, type PlatformAdapter,
 } from "../helpers";
 
@@ -68,16 +68,30 @@ async function ensureLoggedIn(ctx: CollectorContext): Promise<void> {
   if (/\/login/.test(page.url())) throw new CollectorError("에어비앤비 로그인에 실패했습니다. 비밀번호를 확인해 주세요.", true);
 }
 
-async function exportCsv(ctx: CollectorContext, url: string, menu: RegExp, item: RegExp): Promise<string> {
+// 2026-10 기준: 예약 목록 화면(/hosting/reservations)은 "투데이"로 바뀌어 내보내기가 없다.
+// 대신 호스팅 수입의 "수령 완료 금액"·"수령 예정 금액" 화면 아래에 "CSV 내보내기" 버튼이 있다.
+// locale=en 으로 열어 CSV 머리글을 파서가 아는 영어로 받는다.
+const EARNINGS_TABS: { name: string; tab: RegExp }[] = [
+  { name: "수령 완료 금액", tab: /^(paid|paid out|completed( payouts)?|수령 완료 금액)$/i },
+  { name: "수령 예정 금액", tab: /^(upcoming( payouts)?|수령 예정 금액)$/i },
+];
+
+async function exportEarnings(ctx: CollectorContext, tab: RegExp, name: string): Promise<string> {
   const { page } = ctx;
-  await page.goto(url, { waitUntil: "domcontentloaded" });
-  await ctx.snap?.(url.includes("transaction") ? "transactions" : "reservations");
-  const exportButton = await firstVisible(page, byButton(page, menu), 15_000);
-  if (!exportButton) throw new CollectorError(`내보내기 버튼을 찾지 못했습니다 (${url}).`);
+  const link = await firstVisible(page, byText(page, tab), 15_000);
+  if (!link) throw new CollectorError(`에어비앤비 호스팅 수입의 '${name}' 메뉴를 찾지 못했습니다.`);
+  await link.click();
+  await page.waitForLoadState("domcontentloaded");
+  await ctx.snap?.(`earnings-${name}`);
+  const exportButton = await firstVisible(page, byButton(page, /^(export|download) (to )?csv|^csv (내보내기|다운로드)/i), 15_000);
+  if (!exportButton) throw new CollectorError(`에어비앤비 '${name}' 화면에서 CSV 내보내기 버튼을 찾지 못했습니다.`);
   return downloadText(page, async () => {
     await exportButton.click();
-    const download = await firstVisible(page, byButton(page, item), 5_000);
-    if (download) await download.click();
+    // 기간·형식을 고르는 창이 뜨면 그 안의 내보내기·다운로드 버튼을 누른다.
+    const confirm = await firstVisible(page, [
+      page.locator('[role="dialog"]').getByRole("button", { name: /export|download|내보내기|다운로드/i }),
+    ], 3_000);
+    if (confirm) await confirm.click();
   });
 }
 
@@ -85,13 +99,18 @@ export const airbnb: PlatformAdapter = {
   channel: "airbnb",
   async collect(ctx) {
     await ensureLoggedIn(ctx);
-    const files = [await exportCsv(ctx, RESERVATIONS_URL, /^export$|내보내기/i, /download csv|csv/i)];
-    try {
-      // 수수료·정산액은 거래 내역에 있다. 실패해도 예약 목록은 살린다.
-      files.push(await exportCsv(ctx, TRANSACTIONS_URL, /export csv|csv|내보내기/i, /download|csv|다운로드/i));
-    } catch (err) {
-      ctx.log(`거래 내역 내보내기 실패: ${(err as Error).message}`);
+    await ctx.page.goto(`${TRANSACTIONS_URL}?locale=en`, { waitUntil: "domcontentloaded" });
+    const files: string[] = [];
+    const errors: string[] = [];
+    for (const { name, tab } of EARNINGS_TABS) {
+      try {
+        files.push(await exportEarnings(ctx, tab, name));
+      } catch (err) {
+        ctx.log(`${name} 내보내기 실패: ${(err as Error).message}`);
+        errors.push((err as Error).message);
+      }
     }
+    if (files.length === 0) throw new CollectorError(errors[0] ?? "에어비앤비 CSV 를 받지 못했습니다.");
     return files;
   },
 };

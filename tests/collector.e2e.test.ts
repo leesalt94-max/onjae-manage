@@ -1,15 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { chromium, type BrowserContext } from "playwright";
 import { airbnb } from "../collector/platforms/airbnb";
+import { parseExport } from "../lib/parsers";
 
 // 가짜 에어비앤비 화면으로 자동 로그인 → 문자 인증 → CSV 내려받기 흐름을 확인한다.
 // 실제 사이트 문구가 바뀌면 이 테스트가 아니라 첫 실제 실행에서 드러난다. COLLECTOR_E2E=1 일 때만 실행.
 const suite = process.env.COLLECTOR_E2E ? describe : describe.skip;
 
-const CSV = `Confirmation code,Status,Guest name,# of adults,# of children,# of infants,Start date,End date,# of nights,Booked,Listing,Earnings
-HMTEST01,Confirmed,Jane,2,0,0,10/20/2026,10/23/2026,3,09/01/2026,Room,"₩450,000"`;
+// 호스팅 수입 > 수령 완료/예정 금액 > CSV 내보내기 로 받는 거래 내역 모양.
+const PAID_CSV = `Date,Type,Confirmation code,Booking date,Start date,End date,Nights,Guest,Listing,Currency,Amount,Service fee
+10/16/2026,Reservation,HMTEST01,09/01/2026,10/20/2026,10/23/2026,3,Jane,Room,KRW,450000,15000`;
+const UPCOMING_CSV = `Date,Type,Confirmation code,Booking date,Start date,End date,Nights,Guest,Listing,Currency,Amount,Service fee
+11/07/2026,Reservation,HMTEST02,10/01/2026,11/06/2026,11/07/2026,1,Kim,Room,KRW,166676,5000`;
 
-const page = (body: string) => `<!doctype html><html><body>${body}</body></html>`;
+// 화면 안 글자를 파일로 내려받게 하는 버튼 (Playwright 가짜 응답은 다운로드를 직접 못 만들어서 브라우저 안에서 만든다).
+const exportButton = (id: string) => `<button onclick="const a = document.createElement('a');
+  a.href = window.URL.createObjectURL(new Blob([document.getElementById('${id}').textContent], { type: 'text/csv' }));
+  a.download = '${id}.csv'; document.body.appendChild(a); a.click();">CSV 내보내기</button>`;
+
+const page = (body: string) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
+
+const EARNINGS = page(`<nav><a href="#" onclick="event.preventDefault();show('upcoming')">수령 예정 금액</a>
+  <a href="#" onclick="event.preventDefault();show('paid')">수령 완료 금액</a></nav>
+  <section id="paid" style="display:none"><h1>대금 수령 완료</h1>${exportButton("paidcsv")}</section>
+  <section id="upcoming" style="display:none"><h1>예정</h1>${exportButton("upcomingcsv")}</section>
+  <script>function show(id) { for (const s of document.querySelectorAll('section')) s.style.display = s.id === id ? 'block' : 'none'; }</script>
+  <script type="text/plain" id="paidcsv">${PAID_CSV}</script>
+  <script type="text/plain" id="upcomingcsv">${UPCOMING_CSV}</script>`);
 
 // 2026-10 실제 화면처럼 "Phone number or email" 칸 하나에 이메일을 넣고 Continue → 비밀번호 → Log in.
 const LOGIN = page(`<h1>Log in or sign up</h1>
@@ -28,15 +45,8 @@ async function fakeAirbnb(context: BrowserContext) {
     if (url.pathname === "/hosting/reservations/all") {
       // 실제 사이트는 로그인 주소로 보내지만 Playwright 가짜 응답은 리다이렉트를 따라가지 못해 같은 주소에 로그인 창을 띄운다.
       if (!state.loggedIn) return route.fulfill({ contentType: "text/html", body: LOGIN });
-      return route.fulfill({
-        contentType: "text/html",
-        body: page(`<button onclick="document.getElementById('m').style.display='block'">Export</button>
-          <div id="m" style="display:none"><a role="menuitem" href="#" onclick="event.preventDefault();
-            const a = document.createElement('a');
-            a.href = window.URL.createObjectURL(new Blob([document.getElementById('csv').textContent], { type: 'text/csv' }));
-            a.download = 'r.csv'; document.body.appendChild(a); a.click();">Download CSV file</a></div>
-          <script type="text/plain" id="csv">${CSV}</script>`),
-      });
+      // 실제 사이트처럼 로그인 뒤에는 내보내기 없는 "투데이" 화면이 나온다.
+      return route.fulfill({ contentType: "text/html", body: page("<h1>예정된 예약이 2건 있습니다</h1>") });
     }
     if (url.pathname === "/verify") {
       return route.fulfill({
@@ -51,7 +61,7 @@ async function fakeAirbnb(context: BrowserContext) {
       return route.fulfill({ contentType: "text/html", body: page("ok") });
     }
     if (url.pathname === "/users/transaction_history") {
-      return route.fulfill({ contentType: "text/html", body: page("no export here") });
+      return route.fulfill({ contentType: "text/html", body: state.loggedIn ? EARNINGS : LOGIN });
     }
     return route.fulfill({ status: 404, body: "" });
   });
@@ -78,8 +88,11 @@ suite("에어비앤비 자동 로그인 흐름", () => {
 
     expect(prompts).toHaveLength(1);
     expect(fake.loggedIn).toBe(true);
-    expect(files).toHaveLength(1);
+    expect(files).toHaveLength(2);
     expect(files[0]).toContain("HMTEST01");
+    expect(files[1]).toContain("HMTEST02");
+    const parsed = files.flatMap((f) => parseExport("airbnb", f).reservations);
+    expect(parsed.map((r) => r.confirmation)).toEqual(["HMTEST01", "HMTEST02"]);
   }, 120_000);
 
   it("아이디·비밀번호 없이 실행하면 사장님이 창에서 직접 로그인할 때까지 기다렸다가 이어간다", async () => {
