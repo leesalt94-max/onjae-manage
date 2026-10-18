@@ -3,7 +3,9 @@ import { db } from "@/lib/db";
 import { currentMonth, money, monthRange } from "@/lib/format";
 import { pendingOtps } from "@/lib/otp";
 import { REGION_LABELS } from "@/lib/guests";
-import { lastSyncs, monthlyByChannel, upcoming } from "@/lib/stats";
+import { computeAmounts } from "@/lib/amounts";
+import { monthTotals, stayRows } from "@/lib/insights";
+import { getTripConfig, lastSyncs, upcoming } from "@/lib/stats";
 import { CHANNEL_LABELS, CHANNELS } from "@/lib/types";
 import { Flash, type SearchParams } from "./flash";
 import { OwnerShell } from "./nav";
@@ -15,15 +17,19 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   const query = await searchParams;
   const sql = db();
   const month = currentMonth();
-  const [monthly, next, syncs, otps] = await Promise.all([
-    monthlyByChannel(sql, 1),
+  const { from, to } = monthRange(month);
+  const [stays, trip, next, syncs, otps] = await Promise.all([
+    stayRows(sql, from, to),
+    getTripConfig(sql),
     upcoming(sql, 7),
     lastSyncs(sql),
     pendingOtps(sql),
   ]);
-  const thisMonth = monthly.filter((r) => r.month === month);
-  const currencies = [...new Set(thisMonth.map((r) => r.currency))];
-  const { from } = monthRange(month);
+  // 통계의 월별 정산액과 같은 기준: 이번 달에 묵는 밤만큼 나눠 더한다 (달을 넘는 예약은 이번 달 몫만).
+  for (const r of stays) {
+    if (r.commission === null) r.commission = computeAmounts({ channel: r.channel, guest_paid: null, commission: null, payout_amount: r.payout }, trip).commission;
+  }
+  const t = monthTotals(stays, from, to);
 
   return (
     <OwnerShell>
@@ -34,19 +40,15 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
         </div>
       )}
       <h1>{month} 요약</h1>
-      {currencies.length === 0 && <p className="muted">{from} 이후 체크인 예약이 아직 없습니다.</p>}
-      {currencies.map((cur) => {
-        const rows = thisMonth.filter((r) => r.currency === cur);
-        const sum = (k: "payout" | "commission" | "guestPaid") => rows.reduce((a, r) => a + r[k], 0);
-        return (
-          <div className="grid" key={cur}>
-            <div className="panel kpi"><div className="label">정산 예정액</div><div className="value">{money(sum("payout"), cur)}</div></div>
-            <div className="panel kpi"><div className="label">게스트 결제액</div><div className="value">{money(sum("guestPaid"), cur)}</div></div>
-            <div className="panel kpi"><div className="label">플랫폼 수수료</div><div className="value">{money(sum("commission"), cur)}</div></div>
-            <div className="panel kpi"><div className="label">예약 / 숙박일 (체크인 기준)</div><div className="value">{rows.reduce((a, r) => a + r.bookings, 0)}건 / {rows.reduce((a, r) => a + r.nights, 0)}박</div></div>
-          </div>
-        );
-      })}
+      {t.bookings === 0 ? <p className="muted">이번 달 숙박 예약이 아직 없습니다.</p> : (
+        <div className="grid">
+          <div className="panel kpi"><div className="label">정산 예정액</div><div className="value">{money(t.payout, "KRW")}</div></div>
+          <div className="panel kpi"><div className="label">게스트 결제액</div><div className="value">{money(t.guestPaid, "KRW")}</div></div>
+          <div className="panel kpi"><div className="label">플랫폼 수수료</div><div className="value">{money(t.commission, "KRW")}</div></div>
+          <div className="panel kpi"><div className="label">예약 / 이번 달 숙박</div><div className="value">{t.bookings}건 / {t.nights}박</div></div>
+        </div>
+      )}
+      <p className="muted small">이번 달에 묵는 밤 기준이에요. 달을 넘는 예약은 이번 달 몫만 넣어서 통계의 월별 정산액과 같아요.</p>
 
       <h2>7일 안의 체크인</h2>
       {next.length === 0 ? <div className="panel"><p className="muted">없음</p></div> : (

@@ -54,3 +54,32 @@ describe("앞으로 30일 알림", () => {
     expect(notes[0].text).toContain("4밤이 찼고 26밤이 비어 있어요");
   });
 });
+
+describe("평일·주말 요금과 이번 달 합계", () => {
+  const row = (check_in: string, check_out: string, payout: number) =>
+    ({ channel: "airbnb" as const, check_in, check_out, nights: 0, booked_at: null, adults: null, children: null, payout, commission: null });
+
+  it("여러 박 예약도 평일·주말 1박 요금을 나눠 찾는다", async () => {
+    const { weekdayWeekendRates } = await import("../lib/insights");
+    // 청소비 50,000 + 평일 100,000 + 주말 150,000 으로 만든 예약들 (2026-11-02 월, 11-06 금)
+    const price = (wd: number, we: number) => 50_000 + wd * 100_000 + we * 150_000;
+    const rows = [
+      row("2026-11-02", "2026-11-03", price(1, 0)), row("2026-11-03", "2026-11-05", price(2, 0)),
+      row("2026-11-06", "2026-11-07", price(0, 1)), row("2026-11-06", "2026-11-08", price(0, 2)),
+      row("2026-11-05", "2026-11-08", price(1, 2)), row("2026-11-08", "2026-11-10", price(2, 0)),
+      row("2026-11-12", "2026-11-14", price(1, 1)), row("2026-11-13", "2026-11-16", price(1, 2)),
+      row("2026-11-16", "2026-11-17", price(1, 0)), row("2026-11-20", "2026-11-21", price(0, 1)),
+    ];
+    const r = weekdayWeekendRates(rows, (x) => x.payout!)!;
+    expect(r.weekday).toBeCloseTo(100_000, 0);
+    expect(r.weekend).toBeCloseTo(150_000, 0);
+    expect(r.fixed).toBeCloseTo(50_000, 0);
+  });
+
+  it("이번 달 합계는 달을 넘는 예약의 이번 달 몫만 넣는다", async () => {
+    const { monthTotals } = await import("../lib/insights");
+    // 10/24~11/6 13박 중 10월은 8박
+    const t = monthTotals([row("2026-10-24", "2026-11-06", 1_300_000)], "2026-10-01", "2026-11-01");
+    expect(t).toMatchObject({ bookings: 1, nights: 8, payout: 800_000 });
+  });
+});

@@ -186,7 +186,7 @@ export function buildInsights(rows: StayRow[], opts: InsightOptions): Insights {
 
   const chList = [...channels.values()];
   const monthList = [...months.values()];
-  const notes = notesFor(chList, weekdays, lead, stay, monthList, thisMonth, roomCount);
+  const notes = notesFor(chList, weekdays, lead, stay, monthList, thisMonth, roomCount, pastStays);
   // 앞으로 30일: 기간 끝이 오늘 이후일 때만 (지난 기간만 볼 때는 의미 없다)
   if (toD > todayD) notes.push(...aheadNotes(rows, today, roomCount));
   return { months: monthList, past, channels: chList, weekdays, lead, stay, party, notes };
@@ -197,7 +197,7 @@ const LABEL: Record<Channel, string> = { airbnb: "에어비앤비", booking: "�
 const SUBJECT: Record<Channel, string> = { airbnb: "에어비앤비가", booking: "부킹닷컴이", trip: "트립닷컴이" };
 
 // 숫자에서 바로 읽히는 한 줄 요약. 근거가 약하면(표본이 적으면) 말하지 않는다.
-function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"], lead: Bucket[], stay: Bucket[], months: MonthPoint[], thisMonth: string, roomCount: number): Note[] {
+function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"], lead: Bucket[], stay: Bucket[], months: MonthPoint[], thisMonth: string, roomCount: number, stays: StayRow[]): Note[] {
   const notes: Note[] = [];
   const pct = (a: number, b: number) => Math.round((a / b - 1) * 100);
 
@@ -216,7 +216,7 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
   if (done.length >= 3) {
     const best = [...done].sort((a, b) => total(b) - total(a))[0];
     const worst = [...done].sort((a, b) => total(a) - total(b))[0];
-    notes.push({ tag: "최고의 달", text: `${monthName(best.month)}이 ${won(total(best))}(가동률 ${Math.round((best.occupancy ?? 0) * 100)}%)로 가장 좋았고, ${monthName(worst.month)}이 ${won(total(worst))}로 가장 낮았어요.` });
+    notes.push({ tag: "최고의 달", text: `${monthName(best.month)}이 ${won(total(best))}(가동률 ${Math.round((best.occupancy ?? 0) * 100)}%)으로 가장 좋았고, ${monthName(worst.month)}이 ${won(total(worst))}으로 가장 낮았어요.` });
   }
 
   const ranked = channels.filter((c) => c.adr !== null && c.nights >= 5).sort((a, b) => b.adr! - a.adr!);
@@ -233,13 +233,11 @@ function notesFor(channels: Insights["channels"], weekdays: Insights["weekdays"]
   }
 
   const sum = (ws: typeof weekdays, k: "revenue" | "nights") => ws.reduce((a, w) => a + w[k], 0);
-  const weekend = weekdays.filter((_, i) => i === 5 || i === 6);
-  const weekday = weekdays.filter((_, i) => i <= 4);
-  if (sum(weekend, "nights") >= 5 && sum(weekday, "nights") >= 5) {
-    const we = sum(weekend, "revenue") / sum(weekend, "nights");
-    const wd = sum(weekday, "revenue") / sum(weekday, "nights");
-    const d = pct(we, wd);
-    notes.push({ tag: "요일", text: `금·토요일 밤은 박당 ${won(we)}, 일~목요일 밤은 ${won(wd)}이에요 (${d >= 0 ? `주말이 ${d}% 높음` : `주말이 ${-d}% 낮음`}).` });
+  const guest = weekdayWeekendRates(stays, (r) => (r.payout ?? 0) + (r.commission ?? 0));
+  const host = weekdayWeekendRates(stays, (r) => r.payout ?? 0);
+  if (guest && host) {
+    const d = pct(guest.weekend, guest.weekday);
+    notes.push({ tag: "평일·주말 요금", text: `1박 평균 요금은 평일(일~목) ${won(guest.weekday)}, 주말(금·토) ${won(guest.weekend)}이에요 (손님 결제 기준, 청소비 제외${d ? `, 주말이 ${d > 0 ? `${d}% 비쌈` : `${-d}% 쌈`}` : ""}). 사장님 수령액으로는 평일 ${won(host.weekday)}, 주말 ${won(host.weekend)}이에요.` });
   }
   const filled = weekdays.filter((w) => w.nights > 0 || w.occupancy > 0);
   if (filled.length === 7 && sum(weekdays, "nights") >= 20) {
@@ -311,6 +309,75 @@ export function aheadNotes(rows: StayRow[], today: string, roomCount: number): N
     notes.push({ tag: "끼인 하루", tone: "warn", text: `예약 사이에 끼인 1박: ${orphan.map(md).join(", ")}. 최소 숙박일이 2박 이상이면 이 날은 팔리지 않으니 1박 허용이나 할인을 고려해 보세요.` });
   }
   return notes;
+}
+
+/** 한 달(from~to) 안에 묵은 밤만큼 금액을 나눠 더한다. 통계의 월별 정산액과 같은 기준이라 숫자가 맞는다. */
+export function monthTotals(rows: StayRow[], from: string, to: string) {
+  const out = { payout: 0, commission: 0, guestPaid: 0, nights: 0, bookings: 0 };
+  const fromT = toDate(from).getTime();
+  const toT = toDate(to).getTime();
+  for (const r of rows) {
+    const nights = Math.max(1, Math.round((toDate(r.check_out).getTime() - toDate(r.check_in).getTime()) / DAY));
+    let inside = 0;
+    for (let i = 0; i < nights; i++) {
+      const t = toDate(r.check_in).getTime() + i * DAY;
+      if (t >= fromT && t < toT) inside++;
+    }
+    if (!inside) continue;
+    const share = inside / nights;
+    out.bookings++;
+    out.nights += inside;
+    out.payout += (r.payout ?? 0) * share;
+    out.commission += (r.commission ?? 0) * share;
+    out.guestPaid += ((r.payout ?? 0) + (r.commission ?? 0)) * share;
+  }
+  return out;
+}
+
+/**
+ * 평일(일~목 밤)·주말(금·토 밤) 1박 평균 요금. 예약 금액 = 예약당 고정분(청소비 등) + 평일 박수 × 평일 요금 + 주말 박수 × 주말 요금
+ * 으로 보고 모든 예약에 가장 잘 맞는 값을 찾는다(최소제곱). 여러 박 예약도 평일·주말 몫이 섞이지 않게 나눌 수 있다.
+ */
+export function weekdayWeekendRates(rows: StayRow[], value: (r: StayRow) => number) {
+  const X: number[][] = [];
+  const y: number[] = [];
+  for (const r of rows) {
+    if (r.payout === null) continue;
+    let wd = 0;
+    let we = 0;
+    for (let t = toDate(r.check_in).getTime(); t < toDate(r.check_out).getTime(); t += DAY) {
+      const dow = new Date(t).getUTCDay();
+      if (dow === 5 || dow === 6) we++;
+      else wd++;
+    }
+    X.push([1, wd, we]);
+    y.push(value(r));
+  }
+  const weekendStays = X.filter((x) => x[2] > 0).length;
+  const weekdayStays = X.filter((x) => x[1] > 0).length;
+  if (X.length < 10 || weekendStays < 3 || weekdayStays < 3) return null;
+  // 정규방정식 (XᵀX)b = Xᵀy 를 풀어 b = [고정분, 평일, 주말]
+  const A = [0, 1, 2].map((i) => [0, 1, 2].map((j) => X.reduce((a, x) => a + x[i] * x[j], 0)));
+  const v = [0, 1, 2].map((i) => X.reduce((a, x, k) => a + x[i] * y[k], 0));
+  const b = solve3(A, v);
+  if (!b || b[1] <= 0 || b[2] <= 0) return null;
+  return { fixed: b[0], weekday: b[1], weekend: b[2], stays: X.length };
+}
+
+function solve3(A: number[][], v: number[]): number[] | null {
+  const m = A.map((row, i) => [...row, v[i]]);
+  for (let c = 0; c < 3; c++) {
+    let p = c;
+    for (let r = c + 1; r < 3; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+    if (Math.abs(m[p][c]) < 1e-9) return null;
+    [m[c], m[p]] = [m[p], m[c]];
+    for (let r = 0; r < 3; r++) {
+      if (r === c) continue;
+      const f = m[r][c] / m[c][c];
+      for (let k = c; k < 4; k++) m[r][k] -= f * m[c][k];
+    }
+  }
+  return m.map((row, i) => row[3] / row[i]);
 }
 
 // 숙소 오픈일: 설정값이 없으면 첫 체크인 날짜로 본다.
