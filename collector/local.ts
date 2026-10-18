@@ -124,7 +124,11 @@ async function main() {
   }
   log("\n===== 결과 =====");
   for (const line of results) log(line);
-  if (results.some((l) => l.includes("실패"))) log(`\n실패 화면은 ${path.join(HOME, "screenshots")} 에 저장했어요.`);
+  if (results.some((l) => l.includes("실패"))) {
+    log(`\n실패 화면은 ${path.join(HOME, "screenshots")} 에 저장했어요.`);
+    // 로그인이 막히거나 화면이 바뀌어 실패하면, 사장님이 플랫폼에서 직접 받은 파일(CSV·xls·xlsx)을 사이트에 올리면 된다.
+    log(`막힌 곳은 플랫폼에서 직접 파일을 받아 ${config.appUrl}/upload 에 올려 주세요.`);
+  }
 }
 
 main().catch((err) => {
