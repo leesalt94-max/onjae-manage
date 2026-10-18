@@ -3,6 +3,7 @@ import {
   waitForOwnerLogin,
   type CollectorContext, type PlatformAdapter,
 } from "../helpers";
+import type { Locator, Page } from "playwright";
 
 // 트립닷컴 이부킹은 화면 정보가 가장 적다. 실제 계정으로 첫 실행 때 반드시 점검이 필요하다.
 const EBOOKING_URL = "https://ebooking.trip.com/";
@@ -56,14 +57,53 @@ export const trip: PlatformAdapter = {
     // 2026-10 기준: 목록 오른쪽 위 "Download". 누르면 형식·기간을 고르는 창이 뜰 수 있어 확인 버튼도 눌러 본다.
     const exportButton = await firstVisible(page, byText(page, /^(download|export|导出|下载|내보내기|다운로드)$/i), 15_000);
     if (!exportButton) throw new CollectorError("트립닷컴 주문 내보내기 버튼을 찾지 못했습니다.");
-    return [await downloadText(page, async () => {
-      await exportButton.click();
-      await page.waitForTimeout(2_000);
-      await ctx.snap?.("after-download-click");
-      const confirm = await firstVisible(page, [
-        page.locator('[role="dialog"], [class*="modal" i], [class*="drawer" i]').getByRole("button", { name: /^(download|export|confirm|ok|确定|导出|下载|확인|다운로드)$/i }),
-      ], 3_000);
-      if (confirm) await confirm.click();
-    })];
+    await exportButton.click();
+    await page.waitForTimeout(2_000);
+    await ctx.snap?.("after-download-click");
+    const confirm = await firstVisible(page, [
+      page.locator('[role="dialog"], [class*="modal" i], [class*="drawer" i]').getByRole("button", { name: /^(download|export|confirm|ok|确定|导出|下载|확인|다운로드)$/i }),
+    ], 3_000);
+    if (confirm) await confirm.click();
+    // 2026-10 기준: 파일이 바로 받아지지 않고 새 탭에 "다운로드 목록"(/ebkorderv3/download)이 열린다.
+    // 맨 위(가장 최근) 줄이 "생성됨"이 되면 그 줄의 "다운로드"를 누른다.
+    const list = await waitForDownloadList(page);
+    if (!list) {
+      throw new CollectorError("트립닷컴 다운로드 목록 화면이 열리지 않았습니다.");
+    }
+    await list.bringToFront();
+    const row = await waitForReadyRow(list);
+    await ctx.snap?.("download-list");
+    const link = row.getByText(/^(download|다운로드|下载)$/i).first();
+    return [await downloadText(list, () => link.click())];
   },
 };
+
+const DOWNLOAD_LIST = /\/ebkorderv3\/download/i;
+
+async function waitForDownloadList(page: Page): Promise<Page | null> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const found = page.context().pages().find((p) => DOWNLOAD_LIST.test(p.url()));
+    if (found) {
+      await found.waitForLoadState("domcontentloaded");
+      return found;
+    }
+    await page.waitForTimeout(1_000);
+  }
+  return null;
+}
+
+async function waitForReadyRow(list: Page): Promise<Locator> {
+  const deadline = Date.now() + 5 * 60_000;
+  while (Date.now() < deadline) {
+    // "다운로드" 링크가 있는 첫 줄 = 가장 최근 요청.
+    const row = list.locator("tr, [role='row']")
+      .filter({ has: list.getByText(/^(download|다운로드|下载)$/i) }).first();
+    const text = (await row.innerText({ timeout: 10_000 }).catch(() => "")).trim();
+    if (/생성됨|generated|completed|success|已生成|完成/i.test(text)) return row;
+    // 아직 만드는 중이면 잠시 뒤 새로고침한다.
+    await list.waitForTimeout(5_000);
+    await list.reload({ waitUntil: "domcontentloaded" });
+  }
+  throw new CollectorError("트립닷컴 파일이 5분 안에 만들어지지 않았습니다.");
+}
