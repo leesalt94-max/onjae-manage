@@ -146,7 +146,7 @@ export async function regionBreakdown(sql: postgres.Sql, from: string, to: strin
     FROM reservations
     WHERE guest_region IS NOT NULL AND status IN ('confirmed', 'completed') AND check_in >= ${from} AND check_in < ${to}
     GROUP BY 1
-    ORDER BY array_position(ARRAY['japan', 'china', 'asia', 'europe', 'usa', 'other'], guest_region)`;
+    ORDER BY array_position(ARRAY['korea', 'japan', 'china', 'asia', 'europe', 'usa', 'other'], guest_region)`;
 }
 
 // 성별·나이를 입력한 예약이 전체 중 얼마나 되는지 (입력 못 한 예약이 있으니 통계 해석용).

@@ -20,6 +20,7 @@ describe("청소매니저 메모에서 인원·성별 읽기", () => {
     ["4명 4박 콘서트관람.여행  16일 체크아웃", { total: 4, female: 0 }],
     // 청소매니저 입력 양식
     ["전체인원: 4명 (여: 3명 + 남: 1명)\n나라: 일본\n나이대: 20대 4명\n여벌 이불", { total: 4, female: 3, male: 1, region: "japan", ages: ["20s", "20s", "20s", "20s"] }],
+    ["전체인원: 2명\n나라: 한국", { total: 2, region: "korea" }],
     ["전체인원: 2명\n나라: 대만", { total: 2, male: 0, female: 0, region: "china", ages: [] }],
     ["나라: 프랑스\n나이대: 30대 1명, 60대 1명", { total: null, region: "europe", ages: ["30s", "60plus"] }],
     ["전체인원: 3명\n나라: 브라질\n나이대: 40대", { total: 3, region: "other", ages: ["40s", "40s", "40s"] }],

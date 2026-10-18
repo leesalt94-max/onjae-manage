@@ -92,7 +92,8 @@ export function forecastSales(rows: StayRow[], today: string, openedOn: string |
       lo += Math.max(a + b, low);
       hi += Math.max(a + b, high);
     }
-    const remainingNeed = SALES_THRESHOLD - act;
+    // 남은 금액은 실제 매출뿐 아니라 이미 들어온 예약까지 뺀다 (사장님 요청 2026-10-19).
+    const remainingNeed = SALES_THRESHOLD - act - book;
     return {
       year, actual: act, booked: book, expected: exp, low: lo, high: hi, monthsLeft,
       neededPerMonth: remainingNeed > 0 && monthsLeft > 0 ? remainingNeed / monthsLeft : null,

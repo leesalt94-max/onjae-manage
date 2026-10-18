@@ -18,11 +18,11 @@ export const AGE_LABELS: Record<string, string> = {
   unknown: "모름",
 };
 
-// 중국·대만은 하나로 (사장님 결정 2026-10-18).
-export const REGIONS = ["japan", "china", "asia", "europe", "usa", "other"] as const;
+// 중국·대만은 하나로 (사장님 결정 2026-10-18). 한국은 2026-10-19 추가.
+export const REGIONS = ["korea", "japan", "china", "asia", "europe", "usa", "other"] as const;
 export type Region = (typeof REGIONS)[number];
 export const REGION_LABELS: Record<string, string> = {
-  japan: "일본", china: "중국·대만", asia: "아시아(기타)", europe: "유럽", usa: "미국", other: "기타",
+  korea: "한국", japan: "일본", china: "중국·대만", asia: "아시아(기타)", europe: "유럽", usa: "미국", other: "기타",
 };
 export function regionFromForm(value: string): Region | null {
   return (REGIONS as readonly string[]).includes(value) ? (value as Region) : null;

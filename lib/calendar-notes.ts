@@ -24,6 +24,7 @@ const FEMALE = "(?:여자|여성|여(?=\\s*:?\\s*\\d))";
 
 // 나라 이름 → 지역 (중국·대만·홍콩은 하나로, 사장님 결정). 모르는 나라는 기타.
 const REGION_WORDS: [Region, RegExp][] = [
+  ["korea", /한국|대한민국|korea/i],
   ["japan", /일본|japan/i],
   ["china", /중국|대만|홍콩|마카오|china|taiwan|hong\s*kong/i],
   ["usa", /미국|usa|america/i],

@@ -26,4 +26,17 @@ describe("연 총매출 예측", () => {
     expect(y27.expected).toBeCloseTo(12 * 3_000_000, -3);
     expect(y27.neededPerMonth).toBeCloseTo(SALES_THRESHOLD / 12, 0);
   });
+
+  it("내년 예약이 들어오면 남은 금액에서 뺀다", () => {
+    const rows: StayRow[] = [];
+    for (let m = 3; m <= 9; m++) {
+      const mm = String(m).padStart(2, "0");
+      rows.push(row(`2026-${mm}-01`, `2026-${String(m + 1).padStart(2, "0")}-01`, 2_700_000, 300_000));
+    }
+    rows.push(row("2027-02-01", "2027-02-05", 900_000, 100_000)); // 내년 예약 100만원
+    const y27 = forecastSales(rows, "2026-10-18", "2026-02-25", [2026, 2027])!.years[1];
+    expect(y27.actual).toBe(0);
+    expect(y27.booked).toBeCloseTo(1_000_000, 0);
+    expect(y27.neededPerMonth).toBeCloseTo((SALES_THRESHOLD - 1_000_000) / 12, 0);
+  });
 });

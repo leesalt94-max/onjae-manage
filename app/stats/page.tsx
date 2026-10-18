@@ -177,7 +177,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
                   <tbody>
                     <tr><td>지금까지 실제 매출</td><td className="num">{won(f.actual)}</td></tr>
                     <tr><td>이미 들어온 예약</td><td className="num">{won(f.booked)}</td></tr>
-                    <tr><td>4,800만원까지 남은 금액</td><td className="num">{f.actual >= SALES_THRESHOLD ? "이미 넘음" : won(SALES_THRESHOLD - f.actual)}</td></tr>
+                    <tr><td>4,800만원까지 남은 금액 (예약 포함)</td><td className="num">{f.actual + f.booked >= SALES_THRESHOLD ? "이미 넘음" : won(SALES_THRESHOLD - f.actual - f.booked)}</td></tr>
                     {f.neededPerMonth !== null && <tr><td>넘으려면 남은 {f.monthsLeft}개월 월 평균</td><td className="num">{won(f.neededPerMonth)}</td></tr>}
                   </tbody>
                 </table>

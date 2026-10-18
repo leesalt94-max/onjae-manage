@@ -30,8 +30,11 @@ CREATE TABLE IF NOT EXISTS reservations (
 );
 CREATE INDEX IF NOT EXISTS reservations_check_in_idx ON reservations (check_in);
 -- 사장님이 예약마다 고르는 손님 출신 지역 (나라 이름 수준의 큰 구분만, 2026-10-18 사장님 요청).
-ALTER TABLE reservations ADD COLUMN IF NOT EXISTS guest_region TEXT
-  CHECK (guest_region IN ('japan', 'china', 'asia', 'europe', 'usa', 'other')); -- china = 중국·대만
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS guest_region TEXT; -- china = 중국·대만
+-- 한국 추가 (사장님 요청 2026-10-19). 처음 만든 CHECK 를 바꿔 끼운다.
+ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_guest_region_check;
+ALTER TABLE reservations ADD CONSTRAINT reservations_guest_region_check
+  CHECK (guest_region IN ('korea', 'japan', 'china', 'asia', 'europe', 'usa', 'other'));
 -- 사장님이 직접 취소로 표시한 예약. 다음 파일을 올려도 상태를 덮어쓰지 않는다.
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS status_by_owner BOOLEAN NOT NULL DEFAULT false;
 
