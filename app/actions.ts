@@ -131,10 +131,13 @@ export async function importCalendarNotesAction() {
   let msg: string;
   try {
     const result = await importCalendarNotes(db(), await fetchCalendarNotes());
-    msg = result.applied.length
-      ? `청소매니저 메모 ${result.applied.length}건을 반영했어요: ${result.applied.join(", ")}`
-      : "새로 반영할 메모가 없어요.";
-    if (result.skipped.length) msg += ` / 건너뜀: ${result.skipped.join(", ")}`;
+    // 한 줄에 하나씩. 이미 입력된 예약은 개수만 (사장님 요청 2026-10-18).
+    const already = result.skipped.filter((s) => s.endsWith("(이미 입력됨)")).length;
+    const other = result.skipped.filter((s) => !s.endsWith("(이미 입력됨)"));
+    const lines = [result.applied.length ? `새로 반영한 메모 ${result.applied.length}건` : "새로 반영할 메모가 없어요.", ...result.applied.map((a) => `· ${a}`)];
+    if (already) lines.push("", `이미 입력돼 있어 그대로 둔 예약 ${already}건`);
+    if (other.length) lines.push("", `반영하지 못한 메모 ${other.length}건`, ...other.map((s) => `· ${s}`));
+    msg = lines.join("\n");
   } catch (e) {
     back("/settings", e instanceof Error ? e.message : "청소매니저 메모를 가져오지 못했습니다.", "error");
   }

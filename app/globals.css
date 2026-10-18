@@ -68,7 +68,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
-.notice { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--line); background: var(--panel); }
+.notice { white-space: pre-line; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--line); background: var(--panel); }
 .notice.warn { border-color: var(--bad); }
 form.stack { display: grid; gap: 10px; max-width: 420px; }
 label { display: grid; gap: 4px; font-size: 14px; }
