@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { autoImportCalendarNotes } from "@/lib/calendar-notes";
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const body = bodySchema.safeParse(await req.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "보낸 내용 형식이 올바르지 않습니다." }, { status: 400 });
   const result = await importFiles(sql, body.data.channel, body.data.files, "owner_pc");
-  if (result.ok) await autoImportCalendarNotes(sql);
+  if (result.ok) after(() => autoImportCalendarNotes(sql));
   return NextResponse.json(result, { status: result.ok ? 200 : 422 });
 }
 

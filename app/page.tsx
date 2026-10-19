@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { currentMonth, money, monthRange } from "@/lib/format";
@@ -19,7 +20,8 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   const sql = db();
   const month = currentMonth();
   const { from, to } = monthRange(month);
-  await autoImportCalendarNotes(sql);
+  // 메모 가져오기는 화면을 다 보낸 뒤에 한다 (화면이 메모 서버를 기다리지 않게, 2026-10-19).
+  after(() => autoImportCalendarNotes(sql));
   const [stays, trip, next, syncs, otps] = await Promise.all([
     stayRows(sql, from, to),
     getTripConfig(sql),

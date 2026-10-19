@@ -60,8 +60,9 @@ export async function saveGuestProfiles(
     if (!exists) return false;
     await tx`UPDATE reservations SET guest_region = ${region} WHERE id = ${reservationId}`;
     await tx`DELETE FROM guest_profiles WHERE reservation_id = ${reservationId}`;
-    for (const g of guests) {
-      await tx`INSERT INTO guest_profiles (reservation_id, gender, age_band) VALUES (${reservationId}, ${g.gender}, ${g.ageBand})`;
+    // 한 번에 넣는다 (사람마다 따로 넣으면 DB 왕복이 늘어 저장이 느려진다).
+    if (guests.length) {
+      await tx`INSERT INTO guest_profiles ${tx(guests.map((g) => ({ reservation_id: reservationId, gender: g.gender, age_band: g.ageBand })))}`;
     }
     return true;
   });

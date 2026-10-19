@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { money, pct } from "@/lib/format";
@@ -35,7 +36,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Search
   const sql = db();
   const params = await searchParams;
   const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10); // 한국 날짜
-  await autoImportCalendarNotes(sql);
+  // 메모 가져오기는 화면을 다 보낸 뒤에 한다 (화면이 메모 서버를 기다리지 않게, 2026-10-19).
+  after(() => autoImportCalendarNotes(sql));
   const [roomCount, opened] = await Promise.all([getRoomCount(sql), getOpenedOn(sql)]);
 
   // 기간: 기본은 오늘 기준 최근 1년. 빠른 선택(올해·오픈 이후)이나 직접 고른 날짜(끝 날짜 포함).
