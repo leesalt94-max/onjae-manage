@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { geminiGenerate } from "@/lib/gemini";
 import { buildGemInstructions, getGuideData } from "@/lib/guide-bot";
 import { listGuidePhotos } from "@/lib/guide-photos";
-import { CHAT_REPLY_FORMAT, getGuideToken, GUIDE_LANGS, LANG_NAMES, parseChatReply } from "@/lib/guide-page";
+import { CHAT_REPLY_FORMAT, CHAT_REPLY_SCHEMA, questionLang, getGuideToken, GUIDE_LANGS, LANG_NAMES, parseChatReply } from "@/lib/guide-page";
 
 // 손님 안내 페이지의 채팅. 링크 코드로만 열리고, IP 당 시간 30회·전체 하루 400회까지만 답한다.
 // 질문과 답은 사장님이 볼 수 있게 30일 동안 남긴다 (손님 화면에 알림).
@@ -53,18 +53,19 @@ export async function POST(req: NextRequest) {
     RETURNING id`;
 
   const [data, photos] = await Promise.all([getGuideData(sql), listGuidePhotos(sql)]);
+  const answerLang = questionLang(messages[messages.length - 1].text, lang);
   const photoList = photos.length
-    ? "\n\n[사진 목록] 답과 관련된 사진이 있으면 photos 에 id 를 넣어. 사진은 손님 화면에 답 아래 그대로 보여. " +
+    ? "\n\n[사진 목록] 질문과 관련된 사진이 있으면 첫 답부터 반드시 photos 에 id 를 넣어 (손님이 사진을 따로 달라고 하기 전에). 사진은 손님 화면에 답 아래 그대로 보여. " +
       "사진 속 안내 글은 한국어나 영어로만 적혀 있으니, 사진을 보낼 때는 사진 내용(아래 '사진 내용')을 바탕으로 해야 할 일을 손님 언어로 답에 직접 풀어서 설명해. \"사진을 확인하세요\"로만 끝내지 마.\n" +
       photos.map((p) => `- id ${p.id}: ${p.caption}${p.aiText ? `\n  사진 내용: ${p.aiText.replace(/\s*\n\s*/g, " / ")}` : ""}`).join("\n")
     : "";
   const system =
     buildGemInstructions(data) +
     photoList +
-    `\n\n손님이 고른 화면 언어는 ${LANG_NAMES[lang]}야. 손님이 다른 언어로 물으면 그 언어로 답해. 답은 짧게, 마크다운 기호 없이 일반 문장으로 써.` +
-    CHAT_REPLY_FORMAT;
+    CHAT_REPLY_FORMAT +
+    `\n\n중요: 이번 답(answer)은 반드시 ${LANG_NAMES[answerLang]}로만 써. 숙소 정보나 사진 속 글이 한국어·영어로 되어 있어도 ${LANG_NAMES[answerLang]}로 옮겨서 설명해. 답은 짧게, 마크다운 기호 없이 일반 문장으로 써.`;
   try {
-    const reply = parseChatReply(await geminiGenerate(sql, { system, turns: messages, json: true }), photos.map((p) => p.id));
+    const reply = parseChatReply(await geminiGenerate(sql, { system, turns: messages, schema: CHAT_REPLY_SCHEMA }), photos.map((p) => p.id));
     const answer = reply.answer;
     await sql`UPDATE guide_chat SET answer = ${answer}, topic = ${reply.topic}, known = ${reply.known}, q_lang = ${reply.language} WHERE id = ${id}`;
     return NextResponse.json({ answer, photos: reply.photos.map((id) => `/guide/${token}/photo/${id}`) }, { headers: { "cache-control": "no-store" } });

@@ -24,3 +24,18 @@ test("pick lang", () => {
 test("chat reply photos only known ids", () => {
   expect(parseChatReply('{"answer":"a","photos":["3","999","3"]}', ["3", "4"]).photos).toEqual(["3"]);
 });
+
+import { questionLang } from "@/lib/guide-page";
+test("broken json salvage", () => {
+  const r = parseChatReply('{"answer":"온재는 2층에 있어요.\\n계단으로 오세요.","topic":"access","known":true,"language":"ko","photos":[2":1}', ["2", "5"]);
+  expect(r.answer).toBe("온재는 2층에 있어요.\n계단으로 오세요.");
+  expect(r.photos).toEqual(["2"]);
+});
+test("question language", () => {
+  expect(questionLang("온수는 어떻게 틀어?", "ko")).toBe("ko");
+  expect(questionLang("お湯は？", "en")).toBe("ja");
+  expect(questionLang("热水怎么开", "zh-TW")).toBe("zh-TW");
+  expect(questionLang("hot water?", "ko")).toBe("en");
+  expect(questionLang("hot water?", "en")).toBe("en");
+  expect(questionLang("??", "ja")).toBe("ja");
+});

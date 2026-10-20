@@ -16,6 +16,16 @@ export async function setGeminiKey(sql: postgres.Sql, key: string): Promise<void
   await setSecret(sql, KEY, key);
 }
 
+export interface GenerateOpts {
+  system: string;
+  turns: ChatTurn[];
+  json?: boolean;
+  // JSON 모양을 강제한다 (Gemini responseSchema). 모델이 깨진 JSON 을 내는 것을 막는다.
+  schema?: object;
+  maxTokens?: number;
+  timeoutMs?: number;
+}
+
 export interface ChatTurn { role: "user" | "model"; text: string; image?: { mime: string; data: Buffer } }
 
 // 기본 모델이 없어졌거나(404) 잠깐 붐비거나(429·500·503) 늦을 때 다음 모델로 한 번 더 시도한다.
@@ -24,7 +34,7 @@ const RETRYABLE = /Gemini (404|429|500|503)|빈 답|timeout|aborted/i;
 
 export async function geminiGenerate(
   sql: postgres.Sql,
-  opts: { system: string; turns: ChatTurn[]; json?: boolean; maxTokens?: number; timeoutMs?: number },
+  opts: GenerateOpts,
 ): Promise<string> {
   const key = await getGeminiKey(sql);
   if (!key) throw new Error("Gemini API 키가 없습니다.");
@@ -45,7 +55,7 @@ export async function geminiGenerate(
 async function callModel(
   key: string,
   model: string,
-  opts: { system: string; turns: ChatTurn[]; json?: boolean; maxTokens?: number; timeoutMs?: number },
+  opts: GenerateOpts,
 ): Promise<string> {
   const res = await fetch(`${process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com"}/v1beta/models/${model}:generateContent`, {
     method: "POST",
@@ -60,7 +70,8 @@ async function callModel(
         // 최근 Gemini 모델은 답 전에 "생각"에 출력 토큰을 쓰므로 넉넉히 준다 (적으면 빈 답이 온다)
         maxOutputTokens: opts.maxTokens ?? 8192,
         temperature: 0.3,
-        ...(opts.json ? { responseMimeType: "application/json" } : {}),
+        ...(opts.json || opts.schema ? { responseMimeType: "application/json" } : {}),
+        ...(opts.schema ? { responseSchema: opts.schema } : {}),
         // 2.5 Flash 계열은 생각을 끌 수 있다. 안내 답변에는 생각이 필요 없고, 켜 두면 수십 초씩 걸린다.
         ...(model.startsWith("gemini-2.5-flash") ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },

@@ -182,8 +182,22 @@ export type ChatTopic = keyof typeof CHAT_TOPICS;
 
 export interface ChatReply { answer: string; topic: ChatTopic; known: boolean; language: GuideLang | "other"; photos: string[] }
 
-// 모델이 돌려준 JSON 을 믿지 않고 하나씩 확인한다. JSON 이 아니면 글 전체를 답으로 쓴다.
+export const CHAT_REPLY_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    answer: { type: "STRING" },
+    topic: { type: "STRING", enum: Object.keys(CHAT_TOPICS) },
+    known: { type: "BOOLEAN" },
+    language: { type: "STRING", enum: [...GUIDE_LANGS, "other"] },
+    photos: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: ["answer", "topic", "known", "language", "photos"],
+  propertyOrdering: ["answer", "photos", "topic", "known", "language"],
+};
+
+// 모델이 돌려준 JSON 을 믿지 않고 하나씩 확인한다. JSON 이 깨졌으면 answer 와 사진 번호만이라도 건져 낸다.
 export function parseChatReply(text: string, photoIds: string[] = []): ChatReply {
+  const pickPhotos = (list: unknown[]) => [...new Set(list.map(String))].filter((id) => photoIds.includes(id)).slice(0, 3);
   try {
     const v = JSON.parse(text) as Record<string, unknown>;
     const answer = typeof v.answer === "string" ? v.answer.trim() : "";
@@ -193,16 +207,32 @@ export function parseChatReply(text: string, photoIds: string[] = []): ChatReply
         topic: typeof v.topic === "string" && v.topic in CHAT_TOPICS ? (v.topic as ChatTopic) : "other",
         known: v.known !== false,
         language: typeof v.language === "string" && (GUIDE_LANGS as readonly string[]).includes(v.language) ? (v.language as GuideLang) : "other",
-        photos: Array.isArray(v.photos) ? [...new Set(v.photos.map(String))].filter((id) => photoIds.includes(id)).slice(0, 3) : [],
+        photos: Array.isArray(v.photos) ? pickPhotos(v.photos) : [],
       };
     }
   } catch {
-    // 아래로
+    // 아래에서 건져 낸다
+  }
+  const m = text.match(/"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (m) {
+    let answer = m[1];
+    try { answer = JSON.parse(`"${m[1]}"`); } catch { /* 그대로 */ }
+    const photosPart = text.match(/"photos"\s*:\s*\[([^\]]*)/)?.[1] ?? "";
+    return { answer: answer.trim(), topic: "other", known: true, language: "other", photos: pickPhotos(photosPart.match(/\d+/g) ?? []) };
   }
   return { answer: text.trim(), topic: "other", known: true, language: "other", photos: [] };
 }
 
+// 손님이 실제로 쓴 글자로 답할 언어를 정한다. 한자만 있으면 화면에서 고른 중국어(간체·번체)를 따른다.
+export function questionLang(text: string, screen: GuideLang): GuideLang {
+  if (/[\uac00-\ud7a3]/.test(text)) return "ko";
+  if (/[\u3040-\u30ff]/.test(text)) return "ja";
+  if (/[\u4e00-\u9fff]/.test(text)) return screen === "zh-TW" || screen === "zh-CN" ? screen : "zh-CN";
+  if (/[a-z]{2,}/i.test(text)) return screen === "ko" || screen === "ja" || screen.startsWith("zh") ? "en" : screen;
+  return screen;
+}
+
 export const CHAT_REPLY_FORMAT =
-  "\n\n출력 형식: 반드시 JSON 하나만 출력해. " +
+  "\n\n출력 형식: JSON 하나만 출력해. " +
   '{"answer": 손님에게 보낼 답(문자열), "topic": 질문 주제, "known": 숙소 정보로 답할 수 있었으면 true·정보가 없어 호스트에게 물어보라고 했으면 false, "language": 손님이 쓴 언어, "photos": 답과 관련된 사진 id 배열(사진 목록에 있는 것만, 없으면 [], 최대 3개)}. ' +
   `topic 은 ${Object.keys(CHAT_TOPICS).join(", ")} 중 하나. language 는 ${GUIDE_LANGS.join(", ")}, other 중 하나 (대만·홍콩 번체는 zh-TW).`;
