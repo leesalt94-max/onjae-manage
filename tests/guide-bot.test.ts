@@ -21,3 +21,6 @@ test("pick lang", () => {
   expect(pickLang(undefined, "fr-FR")).toBe("en");
   expect(pickLang("ko", "ja")).toBe("ko");
 });
+test("chat reply photos only known ids", () => {
+  expect(parseChatReply('{"answer":"a","photos":["3","999","3"]}', ["3", "4"]).photos).toEqual(["3"]);
+});

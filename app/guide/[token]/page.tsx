@@ -4,7 +4,21 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getGeminiKey } from "@/lib/gemini";
 import { getGuideContent, getGuideToken, GUIDE_LANGS, LANG_NAMES, pickLang, UI } from "@/lib/guide-page";
+import type { GuidePhotoRef } from "@/lib/guide-page";
 import { GuideChat } from "./chat";
+
+function Photo({ token, photo }: { token: string; photo: GuidePhotoRef }) {
+  const src = `/guide/${token}/photo/${photo.id}`;
+  return (
+    <figure className="guide-fig">
+      <a href={src} target="_blank" rel="noopener noreferrer">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={photo.caption} className="guide-photo" loading="lazy" />
+      </a>
+      <figcaption>{photo.caption}</figcaption>
+    </figure>
+  );
+}
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -20,6 +34,9 @@ export default async function GuidePage({ params, searchParams }: Props) {
   const lang = pickLang(typeof sp.lang === "string" ? sp.lang : undefined, h.get("accept-language"));
   const ui = UI[lang];
   const { content, translated } = await getGuideContent(sql, lang);
+  // 항목에 붙지 않았거나 그 항목이 비어 있는 사진은 아래 "사진" 묶음에 모은다
+  const shownKeys = new Set(content.sections.flatMap((s) => s.items.map((i) => i.key)));
+  const loose = content.photos.filter((p) => !p.field || !shownKeys.has(p.field));
 
   return (
     <main className="guide" lang={lang}>
@@ -31,14 +48,18 @@ export default async function GuidePage({ params, searchParams }: Props) {
       <h1>{content.name || ui.title}</h1>
       {content.name && <p className="muted" style={{ marginTop: -8 }}>{ui.title}</p>}
       {!translated && <p className="notice">{ui.pending}</p>}
-      {content.sections.length === 0 && content.faq.length === 0 && <p>{ui.empty}</p>}
+      {content.sections.length === 0 && content.faq.length === 0 && content.photos.length === 0 && <p>{ui.empty}</p>}
 
       {content.sections.map((s, i) => (
         <section key={i} className="panel">
           <h2>{s.title}</h2>
           <dl>
             {s.items.map((it, j) => (
-              <div key={j}><dt>{it.label}</dt><dd>{it.value}</dd></div>
+              <div key={j}>
+                <dt>{it.label}</dt>
+                <dd>{it.value}</dd>
+                {content.photos.filter((p) => p.field === it.key).map((p) => <Photo key={p.id} token={token} photo={p} />)}
+              </div>
             ))}
           </dl>
         </section>
@@ -51,6 +72,13 @@ export default async function GuidePage({ params, searchParams }: Props) {
               <div key={i}><dt>{f.q}</dt><dd>{f.a}</dd></div>
             ))}
           </dl>
+        </section>
+      )}
+
+      {loose.length > 0 && (
+        <section className="panel">
+          <h2>{ui.photos}</h2>
+          {loose.map((p) => <Photo key={p.id} token={token} photo={p} />)}
         </section>
       )}
 

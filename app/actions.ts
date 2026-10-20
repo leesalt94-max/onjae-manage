@@ -13,6 +13,7 @@ import { guestsFromForm, MAX_GUESTS, REGION_LABELS, regionFromForm, saveGuestPro
 import { findSecret, GUIDE_FIELDS, MAX_EXTRA, saveGuideData } from "@/lib/guide-bot";
 import { getGeminiKey, setGeminiKey } from "@/lib/gemini";
 import { resetGuideToken, translateGuide } from "@/lib/guide-page";
+import { addGuidePhoto, countGuidePhotos, deleteGuidePhoto, MAX_PHOTO_BYTES, MAX_PHOTOS, PHOTO_MIMES } from "@/lib/guide-photos";
 import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
@@ -230,4 +231,34 @@ export async function resetGuideTokenAction() {
   await requireOwner();
   await resetGuideToken(db());
   back("/chatbot", "새 링크를 만들었어요. 예전 링크는 더 이상 열리지 않아요.");
+}
+
+// 사진이 바뀌면 설명도 번역해야 하므로 키가 있으면 번역을 다시 만든다.
+async function retranslateLater(sql: ReturnType<typeof db>) {
+  if (await getGeminiKey(sql)) after(() => translateGuide(sql).then(() => undefined));
+}
+
+export async function addGuidePhotoAction(formData: FormData) {
+  await requireOwner();
+  const file = formData.get("photo");
+  const caption = String(formData.get("caption") ?? "").trim().slice(0, 200);
+  const fieldRaw = String(formData.get("field") ?? "");
+  const field = GUIDE_FIELDS.some((f) => f.key === fieldRaw) ? fieldRaw : null;
+  if (!(file instanceof File) || file.size === 0) back("/chatbot", "사진을 골라 주세요.", "error");
+  if (!caption) back("/chatbot", "사진 설명을 적어 주세요. 챗봇이 이 설명을 보고 사진을 골라요.", "error");
+  if (!(PHOTO_MIMES as readonly string[]).includes(file.type)) back("/chatbot", "JPG, PNG, WEBP 사진만 올릴 수 있어요.", "error");
+  if (file.size > MAX_PHOTO_BYTES) back("/chatbot", "사진이 너무 커요. 1.5MB 이하로 올려 주세요.", "error");
+  const sql = db();
+  if ((await countGuidePhotos(sql)) >= MAX_PHOTOS) back("/chatbot", `사진은 ${MAX_PHOTOS}장까지 올릴 수 있어요.`, "error");
+  await addGuidePhoto(sql, { field, caption, mime: file.type, data: Buffer.from(await file.arrayBuffer()) });
+  await retranslateLater(sql);
+  back("/chatbot", "사진을 올렸어요.");
+}
+
+export async function deleteGuidePhotoAction(formData: FormData) {
+  await requireOwner();
+  const sql = db();
+  await deleteGuidePhoto(sql, String(formData.get("id") ?? ""));
+  await retranslateLater(sql);
+  back("/chatbot", "사진을 지웠어요.");
 }

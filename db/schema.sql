@@ -114,3 +114,13 @@ CREATE TABLE IF NOT EXISTS guide_chat (
 );
 CREATE INDEX IF NOT EXISTS guide_chat_ip_idx ON guide_chat (ip, created_at DESC);
 CREATE INDEX IF NOT EXISTS guide_chat_created_idx ON guide_chat (created_at DESC);
+
+-- 손님 안내 사진 (입구, 쓰레기 분리 등). 휴대폰에서 줄여 올리므로 한 장에 수백 KB 정도.
+CREATE TABLE IF NOT EXISTS guide_photos (
+  id         BIGSERIAL PRIMARY KEY,
+  field_key  TEXT,
+  caption    TEXT NOT NULL,
+  mime       TEXT NOT NULL,
+  data       BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

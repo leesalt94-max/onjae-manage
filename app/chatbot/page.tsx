@@ -4,10 +4,12 @@ import { db } from "@/lib/db";
 import { getGeminiKey } from "@/lib/gemini";
 import { getGuideToken, translationStatus } from "@/lib/guide-page";
 import { buildGemInstructions, filledCount, getGuideData, GUIDE_FIELDS, GUIDE_SECTIONS, MAX_EXTRA } from "@/lib/guide-bot";
-import { resetGuideTokenAction, saveGeminiKeyAction, saveGuideBotAction, translateGuideAction } from "../actions";
+import { deleteGuidePhotoAction, resetGuideTokenAction, saveGeminiKeyAction, saveGuideBotAction, translateGuideAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { CopyBox } from "./copy-box";
+import { PhotoUpload } from "./photo-upload";
+import { listGuidePhotos, MAX_PHOTOS } from "@/lib/guide-photos";
 
 export const dynamic = "force-dynamic";
 // API 키를 넣거나 번역을 다시 만들 때 4개 언어 번역을 기다린다
@@ -24,6 +26,8 @@ export default async function ChatbotPage({ searchParams }: { searchParams: Sear
   const params = await searchParams;
   const sql = db();
   const [data, token, key, tr, h] = await Promise.all([getGuideData(sql), getGuideToken(sql, true), getGeminiKey(sql), translationStatus(sql), headers()]);
+  const photos = await listGuidePhotos(sql);
+  const fieldLabel = (k: string | null) => GUIDE_FIELDS.find((f) => f.key === k)?.label;
   const [{ recent }] = await sql<{ recent: number }[]>`SELECT count(*)::int AS recent FROM guide_chat WHERE created_at > now() - interval '7 days'`;
   const link = `https://${h.get("x-forwarded-host") ?? h.get("host")}/guide/${token}`;
   const filled = filledCount(data);
@@ -137,6 +141,30 @@ export default async function ChatbotPage({ searchParams }: { searchParams: Sear
           <span className="muted small">{GUIDE_FIELDS.length}칸 중 {filled}칸을 채웠어요.{data.answers.name ? "" : " 숙소 이름은 꼭 적어 주세요."}</span>
         </div>
       </form>
+
+      <h2>사진 ({photos.length}/{MAX_PHOTOS})</h2>
+      <div className="panel">
+        <p className="muted small" style={{ marginTop: 0 }}>
+          입구, 도어락 위치, 쓰레기 분리, 보일러 조절기처럼 말보다 사진이 쉬운 것을 올려 주세요. 안내 페이지의 그 항목 아래 보이고, 챗봇이 관련 질문에 사진을 같이 보여 줘요.
+          도어락 번호나 와이파이 비밀번호가 찍힌 사진은 올리지 마세요.
+        </p>
+        <PhotoUpload fields={GUIDE_FIELDS.filter((f) => f.key !== "name").map((f) => ({ key: f.key, label: f.label }))} />
+        {photos.length > 0 && (
+          <div className="photo-list" style={{ marginTop: 16 }}>
+            {photos.map((p) => (
+              <figure key={p.id} style={{ margin: 0 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/guide/${token}/photo/${p.id}`} alt={p.caption} />
+                <figcaption className="small">{p.caption}{fieldLabel(p.field) ? <span className="muted"> · {fieldLabel(p.field)}</span> : null}</figcaption>
+                <form action={deleteGuidePhotoAction}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <button type="submit" className="secondary" style={{ marginTop: 4, padding: "4px 10px" }}>지우기</button>
+                </form>
+              </figure>
+            ))}
+          </div>
+        )}
+      </div>
 
     </OwnerShell>
   );

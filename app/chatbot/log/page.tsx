@@ -37,8 +37,8 @@ export default async function ChatLogPage() {
           <div className="guide-msgs">
             {c.turns.map((t, i) => (
               <div key={i} style={{ display: "contents" }}>
-                <p className="me">{t.question}</p>
-                <p className={t.answer ? "bot" : "bot bad"}>{t.answer ?? "(답하지 못함)"}</p>
+                <div className="me"><p>{t.question}</p></div>
+                <div className={t.answer ? "bot" : "bot bad"}><p>{t.answer ?? "(답하지 못함)"}</p></div>
               </div>
             ))}
           </div>

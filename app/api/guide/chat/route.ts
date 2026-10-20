@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { geminiGenerate } from "@/lib/gemini";
 import { buildGemInstructions, getGuideData } from "@/lib/guide-bot";
+import { listGuidePhotos } from "@/lib/guide-photos";
 import { CHAT_REPLY_FORMAT, getGuideToken, GUIDE_LANGS, LANG_NAMES, parseChatReply } from "@/lib/guide-page";
 
 // 손님 안내 페이지의 채팅. 링크 코드로만 열리고, IP 당 시간 30회·전체 하루 400회까지만 답한다.
@@ -49,15 +50,21 @@ export async function POST(req: NextRequest) {
     INSERT INTO guide_chat (conv_id, ip, lang, question) VALUES (${convId}, ${ip}, ${lang}, ${messages[messages.length - 1].text})
     RETURNING id`;
 
+  const [data, photos] = await Promise.all([getGuideData(sql), listGuidePhotos(sql)]);
+  const photoList = photos.length
+    ? "\n\n[사진 목록] 답과 관련된 사진이 있으면 photos 에 id 를 넣어. 사진은 손님 화면에 답 아래 함께 보여.\n" +
+      photos.map((p) => `- id ${p.id}: ${p.caption}`).join("\n")
+    : "";
   const system =
-    buildGemInstructions(await getGuideData(sql)) +
+    buildGemInstructions(data) +
+    photoList +
     `\n\n손님이 고른 화면 언어는 ${LANG_NAMES[lang]}야. 손님이 다른 언어로 물으면 그 언어로 답해. 답은 짧게, 마크다운 기호 없이 일반 문장으로 써.` +
     CHAT_REPLY_FORMAT;
   try {
-    const reply = parseChatReply(await geminiGenerate(sql, { system, turns: messages, maxTokens: 1000, json: true }));
+    const reply = parseChatReply(await geminiGenerate(sql, { system, turns: messages, maxTokens: 1000, json: true }), photos.map((p) => p.id));
     const answer = reply.answer;
     await sql`UPDATE guide_chat SET answer = ${answer}, topic = ${reply.topic}, known = ${reply.known}, q_lang = ${reply.language} WHERE id = ${id}`;
-    return NextResponse.json({ answer }, { headers: { "cache-control": "no-store" } });
+    return NextResponse.json({ answer, photos: reply.photos.map((id) => `/guide/${token}/photo/${id}`) }, { headers: { "cache-control": "no-store" } });
   } catch (e) {
     console.error("guide chat", e);
     return NextResponse.json({ error: "failed" }, { status: 502 });

@@ -6,7 +6,9 @@ const KEY = "gemini_api_key";
 const DEFAULT_MODEL = "gemini-flash-latest";
 
 export async function getGeminiKey(sql: postgres.Sql): Promise<string | null> {
-  return process.env.GEMINI_API_KEY || (await getSecret(sql, KEY));
+  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  // 암호화 키가 바뀌어 풀 수 없으면 키가 없는 것으로 보고 다시 넣게 한다 (화면이 깨지지 않도록)
+  return getSecret(sql, KEY).catch(() => null);
 }
 
 export async function setGeminiKey(sql: postgres.Sql, key: string): Promise<void> {

@@ -6,7 +6,7 @@ function newConvId() {
   return Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-interface Turn { role: "user" | "model"; text: string }
+interface Turn { role: "user" | "model"; text: string; photos?: string[] }
 interface Labels { ask: string; placeholder: string; send: string; thinking: string; error: string; limit: string; note: string; monitored: string }
 
 export function GuideChat({ token, lang, labels }: { token: string; lang: string; labels: Labels }) {
@@ -31,12 +31,12 @@ export function GuideChat({ token, lang, labels }: { token: string; lang: string
       const res = await fetch("/api/guide/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, convId, lang, messages: next.slice(-12) }),
+        body: JSON.stringify({ token, convId, lang, messages: next.slice(-12).map((t) => ({ role: t.role, text: t.text })) }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 429) throw new Error(labels.limit);
       if (!res.ok || !body.answer) throw new Error(labels.error);
-      setTurns([...next, { role: "model", text: body.answer }]);
+      setTurns([...next, { role: "model", text: body.answer, photos: Array.isArray(body.photos) ? body.photos : [] }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : labels.error);
     } finally {
@@ -50,10 +50,18 @@ export function GuideChat({ token, lang, labels }: { token: string; lang: string
       <h2>{labels.ask}</h2>
       <div className="guide-msgs">
         {turns.map((t, i) => (
-          <p key={i} className={t.role === "user" ? "me" : "bot"}>{t.text}</p>
+          <div key={i} className={t.role === "user" ? "me" : "bot"}>
+            <p>{t.text}</p>
+            {t.photos?.map((src) => (
+              <a key={src} href={src} target="_blank" rel="noopener noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt="" className="guide-photo" loading="lazy" />
+              </a>
+            ))}
+          </div>
         ))}
-        {busy && <p className="bot muted">{labels.thinking}</p>}
-        {error && <p className="bot bad">{error}</p>}
+        {busy && <div className="bot muted"><p>{labels.thinking}</p></div>}
+        {error && <div className="bot bad"><p>{error}</p></div>}
         <div ref={endRef} />
       </div>
       <form onSubmit={send} className="guide-input">

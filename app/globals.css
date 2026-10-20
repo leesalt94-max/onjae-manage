@@ -197,8 +197,14 @@ textarea { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px sol
 .guide dd { margin: 2px 0 0; white-space: pre-line; line-height: 1.55; }
 .guide-chat { margin-top: 8px; }
 .guide-msgs { display: grid; gap: 8px; margin-bottom: 10px; }
-.guide-msgs p { margin: 0; padding: 10px 12px; border-radius: 12px; white-space: pre-line; line-height: 1.5; max-width: 85%; }
+.guide-msgs > div { padding: 10px 12px; border-radius: 12px; max-width: 85%; display: grid; gap: 8px; }
+.guide-msgs > div p { margin: 0; white-space: pre-line; line-height: 1.5; }
 .guide-msgs .me { justify-self: end; background: var(--accent); color: #fff; }
 .guide-msgs .bot { justify-self: start; background: var(--panel); border: 1px solid var(--line); }
+.guide-photo { display: block; width: 100%; max-width: 420px; border-radius: 8px; border: 1px solid var(--line); }
+figure.guide-fig { margin: 8px 0 0; }
+figure.guide-fig figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.photo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.photo-list img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
 .guide-input { display: flex; gap: 8px; }
 .guide-input input { flex: 1; min-width: 0; }
