@@ -12,7 +12,7 @@ import { sendKakao } from "@/lib/kakao";
 import { guestsFromForm, MAX_GUESTS, REGION_LABELS, regionFromForm, saveGuestProfiles } from "@/lib/guests";
 import { findSecret, GUIDE_FIELDS, MAX_EXTRA, saveGuideData } from "@/lib/guide-bot";
 import { getGeminiKey, setGeminiKey } from "@/lib/gemini";
-import { resetGuideToken, translateGuide } from "@/lib/guide-page";
+import { resetGuideToken, translateGuide, translationStatus } from "@/lib/guide-page";
 import { addGuidePhoto, countGuidePhotos, describeMissingPhotos, deleteGuidePhoto, MAX_PHOTO_BYTES, MAX_PHOTOS, PHOTO_MIMES } from "@/lib/guide-photos";
 import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
@@ -224,7 +224,10 @@ export async function saveGeminiKeyAction(formData: FormData) {
 
 export async function translateGuideAction() {
   await requireOwner();
-  const result = await translateGuide(db()).catch((e: unknown) => ({ ok: [], failed: [], error: e instanceof Error ? e.message : String(e) }));
+  const sql = db();
+  const { missing } = await translationStatus(sql);
+  // 빠진 언어가 없으면 사장님이 다시 만들려는 것이니 전부 새로 번역한다
+  const result = await translateGuide(sql, { force: missing.length === 0 }).catch((e: unknown) => ({ ok: [], failed: [], error: e instanceof Error ? e.message : String(e) }));
   if (result.ok.length === 0) back("/chatbot", `번역에 실패했어요. 잠시 뒤 다시 눌러 주세요.\n(오류: ${(result.error ?? "").slice(0, 200)})`, "error");
   back("/chatbot", result.failed.length ? `번역을 만들었어요. 일부 언어는 실패해서 다시 눌러야 해요.` : "번역을 새로 만들었어요.");
 }

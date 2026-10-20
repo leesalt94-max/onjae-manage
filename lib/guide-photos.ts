@@ -1,5 +1,7 @@
 import type postgres from "postgres";
 import { geminiGenerate, getGeminiKey } from "./gemini";
+import { translateGuide } from "./guide-page";
+import { tryLock, unlock } from "./settings";
 
 // 손님 안내 사진. 사장님이 /chatbot 에서 올리고, 안내 페이지의 해당 항목 아래와 챗봇 답에 함께 보인다.
 export const MAX_PHOTOS = 30;
@@ -36,18 +38,17 @@ export async function countGuidePhotos(sql: postgres.Sql): Promise<number> {
 // 챗봇은 이 글을 근거로 손님 언어로 설명하고, 사진은 그대로 보여 준다.
 export async function describeMissingPhotos(sql: postgres.Sql): Promise<number> {
   if (!(await getGeminiKey(sql))) return 0;
-  // 화면을 여러 번 열어도 동시에 같은 사진을 읽지 않게 3분짜리 잠금을 건다 (무료 한도 보호)
-  const [lock] = await sql`
-    INSERT INTO settings (key, value) VALUES ('photo_describe_lock', now()::text)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-    WHERE settings.updated_at < now() - interval '3 minutes'
-    RETURNING key`;
-  if (!lock) return 0;
+  // 화면을 여러 번 열어도 동시에 같은 사진을 읽지 않게 잠근다 (무료 한도 보호)
+  if (!(await tryLock(sql, "photo_describe_lock", 3))) return 0;
+  let done = 0;
   try {
-    return await describeLocked(sql);
+    done = await describeLocked(sql);
   } finally {
-    await sql`DELETE FROM settings WHERE key = 'photo_describe_lock'`;
+    await unlock(sql, "photo_describe_lock");
   }
+  // 사진 설명이 생기면 손님 언어로도 옮겨 둔다
+  if (done) await translateGuide(sql).catch(() => undefined);
+  return done;
 }
 
 async function describeLocked(sql: postgres.Sql): Promise<number> {

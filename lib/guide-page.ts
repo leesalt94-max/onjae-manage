@@ -3,17 +3,18 @@ import type postgres from "postgres";
 import { geminiGenerate } from "./gemini";
 import { getGuideData, GUIDE_SECTIONS, type GuideData } from "./guide-bot";
 import { listGuidePhotos } from "./guide-photos";
-import { getSetting, setSetting } from "./settings";
+import { getSetting, setSetting, tryLock, unlock } from "./settings";
 
-// 손님용 다국어 안내 페이지(/guide/<링크 코드>). 사장님이 한국어로 채운 정보를 Gemini 로 한 번 번역해 저장해 두고,
-// 정보가 바뀌면(원문 해시가 달라지면) 다시 번역할 때까지 한국어로 보여 준다.
+// 손님용 다국어 안내 페이지(/guide/<링크 코드>). 사장님이 한국어로 채운 정보를 Gemini 로 언어마다 번역해 저장해 두고,
+// 정보가 바뀌면(원문 해시가 달라지면) 그 언어를 다시 번역할 때까지 한국어로 보여 준다.
 
 export const GUIDE_LANGS = ["ko", "en", "ja", "zh-CN", "zh-TW"] as const;
 export type GuideLang = (typeof GUIDE_LANGS)[number];
 export const LANG_NAMES: Record<GuideLang, string> = { ko: "한국어", en: "English", ja: "日本語", "zh-CN": "简体中文", "zh-TW": "繁體中文" };
 const LANG_FOR_MODEL: Record<GuideLang, string> = { ko: "Korean", en: "English", ja: "Japanese", "zh-CN": "Simplified Chinese", "zh-TW": "Traditional Chinese (Taiwan)" };
 
-export interface GuidePhotoRef { id: string; field: string | null; caption: string }
+// detail: 사진 속 글·표시를 Gemini 가 읽어 둔 설명. 사진 속 글이 한국어라 손님 언어로 옮겨 사진 아래 보여 준다.
+export interface GuidePhotoRef { id: string; field: string | null; caption: string; detail: string | null }
 
 export interface GuideContent {
   name: string;
@@ -38,7 +39,7 @@ export function contentFromData(data: GuideData, photos: GuidePhotoRef[] = []): 
 
 async function koContent(sql: postgres.Sql): Promise<GuideContent> {
   const [data, photos] = await Promise.all([getGuideData(sql), listGuidePhotos(sql)]);
-  return contentFromData(data, photos.map((p) => ({ id: p.id, field: p.field, caption: p.caption })));
+  return contentFromData(data, photos.map((p) => ({ id: p.id, field: p.field, caption: p.caption, detail: p.aiText })));
 }
 
 // 번역할 글만 뽑는다. key·id 는 번역 뒤 순서대로 다시 붙인다.
@@ -46,9 +47,29 @@ function translatable(c: GuideContent) {
   return {
     sections: c.sections.map((s) => ({ title: s.title, items: s.items.map((i) => ({ label: i.label, value: i.value })) })),
     faq: c.faq,
-    photos: c.photos.map((p) => p.caption),
+    photos: c.photos.map((p) => ({ caption: p.caption, detail: p.detail ?? "" })),
   };
 }
+
+const TRANSLATION_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    sections: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          title: { type: "STRING" },
+          items: { type: "ARRAY", items: { type: "OBJECT", properties: { label: { type: "STRING" }, value: { type: "STRING" } }, required: ["label", "value"] } },
+        },
+        required: ["title", "items"],
+      },
+    },
+    faq: { type: "ARRAY", items: { type: "OBJECT", properties: { q: { type: "STRING" }, a: { type: "STRING" } }, required: ["q", "a"] } },
+    photos: { type: "ARRAY", items: { type: "OBJECT", properties: { caption: { type: "STRING" }, detail: { type: "STRING" } }, required: ["caption", "detail"] } },
+  },
+  required: ["sections", "faq", "photos"],
+};
 
 export function mergeTranslation(ko: GuideContent, t: ReturnType<typeof translatable>): GuideContent {
   if (!Array.isArray(t.sections) || t.sections.length !== ko.sections.length) throw new Error("모양이 다름");
@@ -59,7 +80,11 @@ export function mergeTranslation(ko: GuideContent, t: ReturnType<typeof translat
       items: s.items.map((it, j) => ({ key: it.key, label: t.sections[i]?.items?.[j]?.label || it.label, value: t.sections[i]?.items?.[j]?.value || it.value })),
     })),
     faq: ko.faq.map((f, i) => ({ q: t.faq?.[i]?.q || f.q, a: t.faq?.[i]?.a || f.a })),
-    photos: ko.photos.map((p, i) => ({ ...p, caption: (typeof t.photos?.[i] === "string" && t.photos[i]) || p.caption })),
+    photos: ko.photos.map((p, i) => ({
+      ...p,
+      caption: t.photos?.[i]?.caption || p.caption,
+      detail: p.detail ? t.photos?.[i]?.detail || p.detail : null,
+    })),
   };
 }
 
@@ -67,63 +92,78 @@ export function contentHash(c: GuideContent): string {
   return createHash("sha256").update(JSON.stringify(c)).digest("hex").slice(0, 16);
 }
 
-interface Stored { source: string; langs: Partial<Record<GuideLang, GuideContent>> }
-const I18N_KEY = "guide_bot_i18n";
+// 언어마다 어떤 원문으로 번역했는지(source) 따로 둔다. 한 언어가 실패해도 다른 언어 번역은 그대로 쓴다.
+interface Stored { langs: Partial<Record<GuideLang, { source: string; content: GuideContent }>> }
+const I18N_KEY = "guide_bot_i18n_v2";
+const TARGETS = GUIDE_LANGS.filter((l) => l !== "ko");
 
-async function getStored(sql: postgres.Sql): Promise<Stored | null> {
+async function getStored(sql: postgres.Sql): Promise<Stored> {
   const raw = await getSetting(sql, I18N_KEY);
-  if (!raw) return null;
-  try { return JSON.parse(raw) as Stored; } catch { return null; }
+  try {
+    const v = raw ? (JSON.parse(raw) as Stored) : null;
+    return v?.langs ? v : { langs: {} };
+  } catch {
+    return { langs: {} };
+  }
 }
 
-// 그 언어 번역이 지금 정보와 맞으면 번역본, 아니면 한국어 원문.
+// 그 언어 번역이 지금 정보와 맞으면 번역본, 아니면 한국어 원문 (needsTranslation 이면 호출한 쪽이 번역을 시작한다).
 export async function getGuideContent(sql: postgres.Sql, lang: GuideLang): Promise<{ content: GuideContent; translated: boolean }> {
   const ko = await koContent(sql);
   if (lang === "ko") return { content: ko, translated: true };
-  const stored = await getStored(sql);
-  const t = stored?.source === contentHash(ko) ? stored.langs[lang] : undefined;
-  return t ? { content: t, translated: true } : { content: ko, translated: false };
+  const t = (await getStored(sql)).langs[lang];
+  return t?.source === contentHash(ko) ? { content: t.content, translated: true } : { content: ko, translated: false };
 }
 
-export async function translationStatus(sql: postgres.Sql): Promise<"none" | "stale" | "ok"> {
-  const ko = await koContent(sql);
+export async function translationStatus(sql: postgres.Sql): Promise<{ done: GuideLang[]; missing: GuideLang[] }> {
+  const hash = contentHash(await koContent(sql));
   const stored = await getStored(sql);
-  if (!stored) return "none";
-  return stored.source === contentHash(ko) && GUIDE_LANGS.every((l) => l === "ko" || stored.langs[l]) ? "ok" : "stale";
+  const done = TARGETS.filter((l) => stored.langs[l]?.source === hash);
+  return { done, missing: TARGETS.filter((l) => !done.includes(l)) };
 }
 
-// 지금 정보로 4개 언어 번역을 새로 만든다. 언어마다 따로 불러 한 언어가 실패해도 나머지는 남긴다.
-export async function translateGuide(sql: postgres.Sql): Promise<{ ok: GuideLang[]; failed: GuideLang[]; error?: string }> {
-  const ko = await koContent(sql);
-  const source = contentHash(ko);
-  const langs: Stored["langs"] = {};
+// 지금 정보와 맞지 않는 언어만 하나씩 번역한다 (무료 한도에 걸리지 않게 동시에 보내지 않는다).
+export async function translateGuide(sql: postgres.Sql, opts: { force?: boolean } = {}): Promise<{ ok: GuideLang[]; failed: GuideLang[]; error?: string }> {
   const ok: GuideLang[] = [];
   const failed: GuideLang[] = [];
   let error: string | undefined;
-  await Promise.all(
-    GUIDE_LANGS.filter((l) => l !== "ko").map(async (lang) => {
+  if (!(await tryLock(sql, "guide_translate_lock", 5))) return { ok, failed, error: "이미 번역하는 중이에요" };
+  try {
+    const ko = await koContent(sql);
+    const source = contentHash(ko);
+    for (const lang of TARGETS) {
+      const stored = await getStored(sql);
+      if (!opts.force && stored.langs[lang]?.source === source) {
+        ok.push(lang);
+        continue;
+      }
       try {
         const text = await geminiGenerate(sql, {
           system:
             `Translate this Korean guesthouse guide JSON into ${LANG_FOR_MODEL[lang]} for foreign guests. ` +
-            "Keep exactly the same JSON shape and order. Translate every string value, including section titles and labels. " +
-            "Keep proper nouns (station, shop, place names) recognisable: give the local name plus the Korean name in parentheses when helpful. " +
-            "Keep times, numbers, and addresses as they are. Output only the JSON.",
+            "Keep exactly the same structure, order and number of items. Translate every string completely, including section titles, labels, photo captions and photo details; no Korean may remain except proper nouns. " +
+            "For station, shop and place names give the local reading plus the Korean name in parentheses when helpful. " +
+            "Keep times, numbers, and addresses as they are. Empty strings stay empty.",
           turns: [{ role: "user", text: JSON.stringify(translatable(ko)) }],
-          json: true,
+          schema: TRANSLATION_SCHEMA,
           maxTokens: 32768,
-          timeoutMs: 100_000,
+          timeoutMs: 60_000,
         });
-        langs[lang] = mergeTranslation(ko, JSON.parse(text));
+        const content = mergeTranslation(ko, JSON.parse(text));
+        // 언어마다 바로 저장해서, 중간에 시간이 다 돼도 끝난 언어는 남긴다
+        const latest = await getStored(sql);
+        latest.langs[lang] = { source, content };
+        await setSetting(sql, I18N_KEY, JSON.stringify(latest));
         ok.push(lang);
       } catch (e) {
         console.error("guide translate", lang, e);
         failed.push(lang);
         error ??= e instanceof Error ? e.message : String(e);
       }
-    }),
-  );
-  await setSetting(sql, I18N_KEY, JSON.stringify({ source, langs } satisfies Stored));
+    }
+  } finally {
+    await unlock(sql, "guide_translate_lock");
+  }
   return { ok, failed, error };
 }
 

@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { getGeminiKey } from "@/lib/gemini";
-import { getGuideContent, getGuideToken, GUIDE_LANGS, LANG_NAMES, pickLang, UI } from "@/lib/guide-page";
+import { getGuideContent, getGuideToken, translateGuide, GUIDE_LANGS, LANG_NAMES, pickLang, UI } from "@/lib/guide-page";
 import type { GuidePhotoRef } from "@/lib/guide-page";
 import { GuideChat } from "./chat";
 
-function Photo({ token, photo }: { token: string; photo: GuidePhotoRef }) {
+// 한국어가 아닌 화면에서는 사진 속 한국어 안내를 옮긴 글을 사진 아래 보여 준다
+function Photo({ token, photo, showDetail }: { token: string; photo: GuidePhotoRef; showDetail: boolean }) {
   const src = `/guide/${token}/photo/${photo.id}`;
   return (
     <figure className="guide-fig">
@@ -16,12 +18,15 @@ function Photo({ token, photo }: { token: string; photo: GuidePhotoRef }) {
         <img src={src} alt={photo.caption} className="guide-photo" loading="lazy" />
       </a>
       <figcaption>{photo.caption}</figcaption>
+      {showDetail && photo.detail && <p className="guide-photo-detail">{photo.detail}</p>}
     </figure>
   );
 }
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
+// 처음 연 언어의 번역을 뒤에서 만들 시간을 준다
+export const maxDuration = 120;
 
 type Props = { params: Promise<{ token: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -34,6 +39,8 @@ export default async function GuidePage({ params, searchParams }: Props) {
   const lang = pickLang(typeof sp.lang === "string" ? sp.lang : undefined, h.get("accept-language"));
   const ui = UI[lang];
   const { content, translated } = await getGuideContent(sql, lang);
+  // 이 언어 번역이 아직 없으면 지금 만들기 시작한다 (다음에 열 때부터 번역본이 보인다)
+  if (!translated && key) after(() => translateGuide(sql).then(() => undefined));
   // 항목에 붙지 않았거나 그 항목이 비어 있는 사진은 아래 "사진" 묶음에 모은다
   const shownKeys = new Set(content.sections.flatMap((s) => s.items.map((i) => i.key)));
   const loose = content.photos.filter((p) => !p.field || !shownKeys.has(p.field));
@@ -62,7 +69,7 @@ export default async function GuidePage({ params, searchParams }: Props) {
                 <div key={j}>
                   <dt>{it.label}</dt>
                   <dd>{it.value}</dd>
-                  {content.photos.filter((p) => p.field === it.key).map((p) => <Photo key={p.id} token={token} photo={p} />)}
+                  {content.photos.filter((p) => p.field === it.key).map((p) => <Photo key={p.id} token={token} photo={p} showDetail={lang !== "ko" && translated} />)}
                 </div>
               ))}
             </dl>
@@ -82,7 +89,7 @@ export default async function GuidePage({ params, searchParams }: Props) {
         {loose.length > 0 && (
           <section className="panel">
             <h2>{ui.photos}</h2>
-            {loose.map((p) => <Photo key={p.id} token={token} photo={p} />)}
+            {loose.map((p) => <Photo key={p.id} token={token} photo={p} showDetail={lang !== "ko" && translated} />)}
           </section>
         )}
       </details>

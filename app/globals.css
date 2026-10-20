@@ -210,3 +210,4 @@ figure.guide-fig figcaption { font-size: 13px; color: var(--muted); margin-top: 
 .guide-input input { flex: 1; min-width: 0; }
 .guide-more { margin-top: 24px; }
 .guide-more > summary { cursor: pointer; font-weight: 600; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin-bottom: 12px; }
+.guide-photo-detail { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg); font-size: 14px; line-height: 1.55; white-space: pre-line; }

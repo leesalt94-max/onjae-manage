@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getGeminiKey } from "@/lib/gemini";
-import { getGuideToken, translationStatus } from "@/lib/guide-page";
+import { getGuideToken, LANG_NAMES, translationStatus } from "@/lib/guide-page";
 import { buildGemInstructions, filledCount, getGuideData, GUIDE_FIELDS, GUIDE_SECTIONS, MAX_EXTRA } from "@/lib/guide-bot";
 import { deleteGuidePhotoAction, rereadGuidePhotoAction, resetGuideTokenAction, saveGeminiKeyAction, saveGuideBotAction, translateGuideAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
@@ -77,10 +77,11 @@ export default async function ChatbotPage({ searchParams }: { searchParams: Sear
         {key ? (
           <>
             <p style={{ marginTop: 0 }}>
-              API 키가 연결돼 있어요. 번역: {tr === "ok" ? "최신" : tr === "stale" ? "정보가 바뀌어 다시 만드는 중이거나 일부 실패 (손님 화면은 한국어로 보여요)" : "아직 없음"}
+              API 키가 연결돼 있어요. 번역 완료: {tr.done.length ? tr.done.map((l) => LANG_NAMES[l]).join(", ") : "없음"}
+              {tr.missing.length > 0 && <> · 아직: {tr.missing.map((l) => LANG_NAMES[l]).join(", ")} (번역 중이거나 실패. 손님이 그 언어를 열면 자동으로 다시 시도해요)</>}
             </p>
             <form action={translateGuideAction}>
-              <button type="submit" className="secondary">번역 다시 만들기</button>
+              <button type="submit" className="secondary">{tr.missing.length ? "지금 번역하기" : "번역 다시 만들기"}</button>
             </form>
           </>
         ) : (
