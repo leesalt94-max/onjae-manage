@@ -7,7 +7,7 @@ function newConvId() {
 }
 
 interface Turn { role: "user" | "model"; text: string; photos?: string[] }
-interface Labels { ask: string; placeholder: string; send: string; thinking: string; error: string; limit: string; note: string; monitored: string }
+interface Labels { greeting: string; ask: string; placeholder: string; send: string; thinking: string; error: string; limit: string; note: string; monitored: string }
 
 export function GuideChat({ token, lang, labels }: { token: string; lang: string; labels: Labels }) {
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -49,6 +49,7 @@ export function GuideChat({ token, lang, labels }: { token: string; lang: string
     <section className="guide-chat">
       <h2>{labels.ask}</h2>
       <div className="guide-msgs">
+        <div className="bot"><p>{labels.greeting}</p></div>
         {turns.map((t, i) => (
           <div key={i} className={t.role === "user" ? "me" : "bot"}>
             <p>{t.text}</p>

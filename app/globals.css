@@ -208,3 +208,5 @@ figure.guide-fig figcaption { font-size: 13px; color: var(--muted); margin-top: 
 .photo-list img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
 .guide-input { display: flex; gap: 8px; }
 .guide-input input { flex: 1; min-width: 0; }
+.guide-more { margin-top: 24px; }
+.guide-more > summary { cursor: pointer; font-weight: 600; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin-bottom: 12px; }

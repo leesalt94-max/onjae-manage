@@ -50,39 +50,42 @@ export default async function GuidePage({ params, searchParams }: Props) {
       {!translated && <p className="notice">{ui.pending}</p>}
       {content.sections.length === 0 && content.faq.length === 0 && content.photos.length === 0 && <p>{ui.empty}</p>}
 
-      {content.sections.map((s, i) => (
-        <section key={i} className="panel">
-          <h2>{s.title}</h2>
-          <dl>
-            {s.items.map((it, j) => (
-              <div key={j}>
-                <dt>{it.label}</dt>
-                <dd>{it.value}</dd>
-                {content.photos.filter((p) => p.field === it.key).map((p) => <Photo key={p.id} token={token} photo={p} />)}
-              </div>
-            ))}
-          </dl>
-        </section>
-      ))}
-      {content.faq.length > 0 && (
-        <section className="panel">
-          <h2>{ui.faq}</h2>
-          <dl>
-            {content.faq.map((f, i) => (
-              <div key={i}><dt>{f.q}</dt><dd>{f.a}</dd></div>
-            ))}
-          </dl>
-        </section>
-      )}
-
-      {loose.length > 0 && (
-        <section className="panel">
-          <h2>{ui.photos}</h2>
-          {loose.map((p) => <Photo key={p.id} token={token} photo={p} />)}
-        </section>
-      )}
-
       {key && <GuideChat token={token} lang={lang} labels={ui} />}
+
+      <details className="guide-more" open={!key}>
+        <summary>{ui.more}</summary>
+        {content.sections.map((s, i) => (
+          <section key={i} className="panel">
+            <h2>{s.title}</h2>
+            <dl>
+              {s.items.map((it, j) => (
+                <div key={j}>
+                  <dt>{it.label}</dt>
+                  <dd>{it.value}</dd>
+                  {content.photos.filter((p) => p.field === it.key).map((p) => <Photo key={p.id} token={token} photo={p} />)}
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+        {content.faq.length > 0 && (
+          <section className="panel">
+            <h2>{ui.faq}</h2>
+            <dl>
+              {content.faq.map((f, i) => (
+                <div key={i}><dt>{f.q}</dt><dd>{f.a}</dd></div>
+              ))}
+            </dl>
+          </section>
+        )}
+
+        {loose.length > 0 && (
+          <section className="panel">
+            <h2>{ui.photos}</h2>
+            {loose.map((p) => <Photo key={p.id} token={token} photo={p} />)}
+          </section>
+        )}
+      </details>
     </main>
   );
 }
