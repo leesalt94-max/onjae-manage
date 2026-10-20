@@ -1,21 +1,31 @@
+import { headers } from "next/headers";
 import { requireOwner } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getGeminiKey } from "@/lib/gemini";
+import { getGuideToken, translationStatus } from "@/lib/guide-page";
 import { buildGemInstructions, filledCount, getGuideData, GUIDE_FIELDS, GUIDE_SECTIONS, MAX_EXTRA } from "@/lib/guide-bot";
-import { saveGuideBotAction } from "../actions";
+import { resetGuideTokenAction, saveGeminiKeyAction, saveGuideBotAction, translateGuideAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { CopyBox } from "./copy-box";
 
 export const dynamic = "force-dynamic";
+// API 키를 넣거나 번역을 다시 만들 때 4개 언어 번역을 기다린다
+export const maxDuration = 120;
 
-const GUEST_MESSAGE = `숙소 이용 중 궁금한 점은 아래 AI 안내 도우미에게 편한 언어로 물어보세요. 24시간 바로 답해 드려요.
-Have a question during your stay? Ask our AI guide in any language, 24/7.
-(여기에 내 Gem 링크)`;
+function guestMessage(link: string) {
+  return `숙소 안내와 AI 도우미예요. 궁금한 점은 편한 언어로 물어보세요. 24시간 바로 답해 드려요.
+Guest guide and AI helper. Ask anything in your language, 24/7.
+${link}`;
+}
 
 export default async function ChatbotPage({ searchParams }: { searchParams: SearchParams }) {
   await requireOwner();
   const params = await searchParams;
-  const data = await getGuideData(db());
+  const sql = db();
+  const [data, token, key, tr, h] = await Promise.all([getGuideData(sql), getGuideToken(sql, true), getGeminiKey(sql), translationStatus(sql), headers()]);
+  const [{ recent }] = await sql<{ recent: number }[]>`SELECT count(*)::int AS recent FROM guide_chat WHERE created_at > now() - interval '7 days'`;
+  const link = `https://${h.get("x-forwarded-host") ?? h.get("host")}/guide/${token}`;
   const filled = filledCount(data);
   // 빈 칸 3개는 항상 남겨 둔다
   const extras = [...data.extras, ...Array.from({ length: 3 }, () => ({ q: "", a: "" }))].slice(0, MAX_EXTRA);
@@ -33,6 +43,58 @@ export default async function ChatbotPage({ searchParams }: { searchParams: Sear
           도어락 번호, 공동현관 번호, 와이파이 비밀번호는 어느 칸에도 적지 마세요. 링크만 있으면 누구나 챗봇에 물어볼 수 있어요.
         </p>
       </div>
+
+      <h2>손님에게 보낼 링크</h2>
+      <div className="panel">
+        <p className="muted small" style={{ marginTop: 0 }}>
+          체크인 안내 메시지에 붙여 넣으세요. 손님은 로그인 없이 열고, 영어·일본어·중국어로 바꿔 볼 수 있어요.
+          {key ? " 페이지 아래 채팅창에서 어떤 언어로든 물어볼 수 있어요." : " 채팅창은 아래 Gemini API 키를 넣으면 나타나요."}
+        </p>
+        <CopyBox text={guestMessage(link)} rows={4} />
+        <div className="row" style={{ marginTop: 8 }}>
+          <a className="button-link" href={link} target="_blank" rel="noopener noreferrer">손님 화면 보기 ↗</a>
+          <form action={resetGuideTokenAction}>
+            <button type="submit" className="secondary">링크 새로 만들기 (예전 링크는 끊김)</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="panel">
+        <a className="button-link" href="/chatbot/log">손님 대화 기록 보기</a>{" "}
+        <a className="button-link" href="/chatbot/stats">질문 통계</a>
+        <span className="muted small" style={{ marginLeft: 8 }}>최근 30일 · 최근 7일 질문 {recent}개</span>
+      </div>
+
+      <h2>번역과 채팅 (Gemini API 키)</h2>
+      <div className="panel">
+        {key ? (
+          <>
+            <p style={{ marginTop: 0 }}>
+              API 키가 연결돼 있어요. 번역: {tr === "ok" ? "최신" : tr === "stale" ? "정보가 바뀌어 다시 만드는 중이거나 일부 실패 (손님 화면은 한국어로 보여요)" : "아직 없음"}
+            </p>
+            <form action={translateGuideAction}>
+              <button type="submit" className="secondary">번역 다시 만들기</button>
+            </form>
+          </>
+        ) : (
+          <ol style={{ marginTop: 0 }}>
+            <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">구글 AI Studio ↗</a>에 구글 계정으로 로그인해요.</li>
+            <li>&quot;API 키 만들기(Create API key)&quot;를 눌러 키를 복사해요. 결제 정보를 넣지 않으면 무료 등급으로만 쓰여 요금이 나가지 않아요.</li>
+            <li>아래 칸에 붙여 넣고 저장해요. 저장하면 바로 번역을 만들어요 (1분쯤 걸려요).</li>
+          </ol>
+        )}
+        <form action={saveGeminiKeyAction} className="row" style={{ marginTop: 8 }}>
+          <input type="password" name="geminiKey" placeholder={key ? "새 키로 바꿀 때만 입력" : "AI Studio 에서 복사한 키"} autoComplete="off" style={{ flex: 1, minWidth: 0 }} required />
+          <button type="submit">키 저장</button>
+        </form>
+        <p className="muted small" style={{ marginBottom: 0 }}>키는 암호화해서 저장해요. 손님 질문은 IP 당 1시간 30번, 하루 전체 400번까지만 받아 무료 한도를 넘지 않게 해요.</p>
+      </div>
+
+      <details className="panel">
+        <summary>제미나이 Gem 으로도 만들고 싶다면</summary>
+        <p className="muted small">아래 안내문을 복사해 <a href="https://gemini.google.com/gems/create" target="_blank" rel="noopener noreferrer">제미나이 새 Gem ↗</a>의 요청 사항 칸에 붙여 넣으세요. Gem 링크는 손님이 구글에 로그인해야 열려요.</p>
+        <CopyBox text={buildGemInstructions(data)} />
+      </details>
 
       <form action={saveGuideBotAction} className="guide-form">
         {GUIDE_SECTIONS.map((s) => (
@@ -76,29 +138,6 @@ export default async function ChatbotPage({ searchParams }: { searchParams: Sear
         </div>
       </form>
 
-      <h2>1. 안내문 복사하기</h2>
-      <div className="panel">
-        <CopyBox text={buildGemInstructions(data)} />
-        <p className="muted small" style={{ marginBottom: 0 }}>저장한 내용으로 만든 글이에요. 정보를 고치면 저장한 뒤 다시 복사해 Gem에 덮어 붙여 넣으세요.</p>
-      </div>
-
-      <h2>2. 제미나이에서 Gem 만들기</h2>
-      <div className="panel">
-        <ol style={{ marginTop: 0 }}>
-          <li>아래 버튼으로 제미나이를 열고 구글 계정으로 로그인해요.</li>
-          <li>새 Gem 화면의 이름 칸에 숙소 이름을 적어요.</li>
-          <li>요청 사항 칸에 복사한 안내문을 붙여 넣고 저장해요.</li>
-          <li>Gem 목록에서 방금 만든 Gem의 공유 버튼(안 보이면 ⋮)을 눌러 링크를 복사해요.</li>
-        </ol>
-        <p className="muted small">새 Gem 화면이 바로 안 열리면 제미나이 왼쪽 메뉴에서 Gem → 새 Gem을 누르세요.</p>
-        <a className="button-link" href="https://gemini.google.com/gems/create" target="_blank" rel="noopener noreferrer">제미나이 열기 ↗</a>
-      </div>
-
-      <h2>3. 손님에게 보내기</h2>
-      <div className="panel">
-        <p className="muted small" style={{ marginTop: 0 }}>체크인 안내 메시지에 아래 글과 Gem 링크를 함께 붙여 넣으세요.</p>
-        <CopyBox text={GUEST_MESSAGE} rows={4} />
-      </div>
     </OwnerShell>
   );
 }

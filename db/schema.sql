@@ -97,3 +97,20 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS login_attempts_ip_idx ON login_attempts (ip, created_at DESC);
+
+-- 손님 안내 챗봇 질문. 주제·언어·답을 알았는지는 통계용으로 계속 남기고,
+-- 질문·답 글과 ip 는 30일이 지나면 지운다 (ip 는 시간당 질문 수 제한에만 쓰고 화면에 보여 주지 않는다).
+CREATE TABLE IF NOT EXISTS guide_chat (
+  id         BIGSERIAL PRIMARY KEY,
+  conv_id    TEXT NOT NULL,
+  ip         TEXT,
+  lang       TEXT NOT NULL,
+  q_lang     TEXT,
+  topic      TEXT,
+  known      BOOLEAN,
+  question   TEXT,
+  answer     TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS guide_chat_ip_idx ON guide_chat (ip, created_at DESC);
+CREATE INDEX IF NOT EXISTS guide_chat_created_idx ON guide_chat (created_at DESC);

@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { login, logout, requireOwner } from "@/lib/auth";
@@ -10,6 +11,8 @@ import { fetchCalendarNotes, importCalendarNotes } from "@/lib/calendar-notes";
 import { sendKakao } from "@/lib/kakao";
 import { guestsFromForm, MAX_GUESTS, REGION_LABELS, regionFromForm, saveGuestProfiles } from "@/lib/guests";
 import { findSecret, GUIDE_FIELDS, MAX_EXTRA, saveGuideData } from "@/lib/guide-bot";
+import { getGeminiKey, setGeminiKey } from "@/lib/gemini";
+import { resetGuideToken, translateGuide } from "@/lib/guide-page";
 import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
@@ -198,6 +201,33 @@ export async function saveGuideBotAction(formData: FormData) {
     .slice(0, MAX_EXTRA);
   const data = { answers, extras };
   if (findSecret(data)) back("/chatbot", "비밀번호나 도어락 번호처럼 보이는 숫자가 있어요. 링크만 있으면 누구나 물어볼 수 있으니 지우고 저장해 주세요.", "error");
-  await saveGuideData(db(), data);
-  back("/chatbot", "저장했습니다. 아래 안내문을 다시 복사해 Gem에 붙여 넣으면 반영돼요.");
+  const sql = db();
+  await saveGuideData(sql, data);
+  // 번역은 시간이 걸려서 화면을 먼저 돌려준다. 끝나기 전까지 손님 페이지는 한국어로 보인다.
+  if (await getGeminiKey(sql)) after(() => translateGuide(sql).then(() => undefined));
+  back("/chatbot", "저장했습니다. 영어·일본어·중국어 번역은 1분쯤 뒤 손님 페이지에 반영돼요.");
+}
+
+export async function saveGeminiKeyAction(formData: FormData) {
+  await requireOwner();
+  const key = String(formData.get("geminiKey") ?? "").trim();
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(key)) back("/chatbot", "API 키 모양이 아니에요. AI Studio 에서 복사한 키를 그대로 붙여 넣어 주세요.", "error");
+  const sql = db();
+  await setGeminiKey(sql, key);
+  const result = await translateGuide(sql).catch(() => null);
+  if (!result || result.ok.length === 0) back("/chatbot", "키는 저장했지만 Gemini 연결에 실패했어요. 키를 다시 확인해 주세요.", "error");
+  back("/chatbot", "API 키를 저장하고 번역을 만들었어요. 이제 손님 페이지에 채팅창이 보여요.");
+}
+
+export async function translateGuideAction() {
+  await requireOwner();
+  const result = await translateGuide(db()).catch(() => null);
+  if (!result || result.ok.length === 0) back("/chatbot", "번역에 실패했어요. 잠시 뒤 다시 눌러 주세요.", "error");
+  back("/chatbot", result.failed.length ? `번역을 만들었어요. 일부 언어는 실패해서 다시 눌러야 해요.` : "번역을 새로 만들었어요.");
+}
+
+export async function resetGuideTokenAction() {
+  await requireOwner();
+  await resetGuideToken(db());
+  back("/chatbot", "새 링크를 만들었어요. 예전 링크는 더 이상 열리지 않아요.");
 }
