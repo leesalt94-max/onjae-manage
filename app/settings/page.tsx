@@ -37,6 +37,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
         </p>
       </div>
 
+      <h2>손님 안내 챗봇</h2>
+      <div className="panel">
+        <p className="muted" style={{ marginTop: 0 }}>숙소 정보를 채우면 손님이 어떤 언어로 물어도 답하는 제미나이 챗봇(Gem)용 안내문을 만들어 드려요.</p>
+        <a className="button-link" href="/chatbot">챗봇 정보 채우기</a>
+      </div>
+
       <h2>청소매니저 메모 가져오기</h2>
       <div className="panel">
         <p className="muted">

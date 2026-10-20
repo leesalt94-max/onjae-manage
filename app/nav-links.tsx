@@ -7,7 +7,7 @@ const LINKS: { href: string; label: string; also?: string[] }[] = [
   { href: "/reservations", label: "예약" },
   { href: "/stats", label: "통계" },
   // 파일 올리기·인증번호는 설정 안에서 들어간다 (사장님 요청 2026-10-18: 메뉴는 한 줄로)
-  { href: "/settings", label: "설정", also: ["/upload", "/otp"] },
+  { href: "/settings", label: "설정", also: ["/upload", "/otp", "/chatbot"] },
 ];
 
 // 지금 보고 있는 메뉴를 표시한다 (휴대폰에서 어디 있는지 바로 보이게).

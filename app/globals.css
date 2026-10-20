@@ -179,3 +179,10 @@ a.card-link .link { color: var(--accent); }
 .meter-fill { position: absolute; left: 0; top: 4px; bottom: 4px; background: var(--series-1); border-radius: 0 3px 3px 0; }
 .meter-line { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
 .button-link { display: inline-block; padding: 8px 14px; border-radius: 8px; background: var(--accent); color: #fff; text-decoration: none; }
+
+/* 손님 안내 챗봇 */
+textarea { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); width: 100%; box-sizing: border-box; resize: vertical; }
+.guide-fields { display: grid; gap: 14px; }
+.guide-fields input { width: 100%; box-sizing: border-box; }
+.guide-extra { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.stack-wide { display: grid; gap: 8px; }

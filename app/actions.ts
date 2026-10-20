@@ -9,6 +9,7 @@ import { importFiles } from "@/lib/import-files";
 import { fetchCalendarNotes, importCalendarNotes } from "@/lib/calendar-notes";
 import { sendKakao } from "@/lib/kakao";
 import { guestsFromForm, MAX_GUESTS, REGION_LABELS, regionFromForm, saveGuestProfiles } from "@/lib/guests";
+import { findSecret, GUIDE_FIELDS, MAX_EXTRA, saveGuideData } from "@/lib/guide-bot";
 import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
@@ -180,4 +181,23 @@ export async function saveGuestsAction(formData: FormData) {
 export async function createPcTokenAction(): Promise<{ token: string }> {
   await requireOwner();
   return { token: await createPcToken(db()) };
+}
+
+export async function saveGuideBotAction(formData: FormData) {
+  await requireOwner();
+  const answers: Record<string, string> = {};
+  for (const f of GUIDE_FIELDS) {
+    const v = String(formData.get(f.key) ?? "").trim().slice(0, 1000);
+    if (v) answers[f.key] = v;
+  }
+  const qs = formData.getAll("extraQ").map(String);
+  const as = formData.getAll("extraA").map(String);
+  const extras = qs
+    .map((q, i) => ({ q: q.trim().slice(0, 300), a: String(as[i] ?? "").trim().slice(0, 1000) }))
+    .filter((e) => e.q || e.a)
+    .slice(0, MAX_EXTRA);
+  const data = { answers, extras };
+  if (findSecret(data)) back("/chatbot", "비밀번호나 도어락 번호처럼 보이는 숫자가 있어요. 링크만 있으면 누구나 물어볼 수 있으니 지우고 저장해 주세요.", "error");
+  await saveGuideData(db(), data);
+  back("/chatbot", "저장했습니다. 아래 안내문을 다시 복사해 Gem에 붙여 넣으면 반영돼요.");
 }
