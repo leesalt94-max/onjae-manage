@@ -17,13 +17,34 @@ export async function setGeminiKey(sql: postgres.Sql, key: string): Promise<void
 
 export interface ChatTurn { role: "user" | "model"; text: string }
 
+// 기본 모델이 없어졌거나(404) 잠깐 붐빌 때(429·500·503) 다음 모델로 한 번 더 시도한다.
+const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+
 export async function geminiGenerate(
   sql: postgres.Sql,
   opts: { system: string; turns: ChatTurn[]; json?: boolean; maxTokens?: number; timeoutMs?: number },
 ): Promise<string> {
   const key = await getGeminiKey(sql);
   if (!key) throw new Error("Gemini API 키가 없습니다.");
-  const model = (await getSetting(sql, "gemini_model")) || DEFAULT_MODEL;
+  const first = (await getSetting(sql, "gemini_model")) || DEFAULT_MODEL;
+  const models = [first, ...FALLBACK_MODELS.filter((m) => m !== first)];
+  let lastError: Error | null = null;
+  for (const model of models) {
+    try {
+      return await callModel(key, model, opts);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (!/Gemini (404|429|500|503)|빈 답/.test(lastError.message)) throw lastError;
+    }
+  }
+  throw lastError ?? new Error("Gemini 호출 실패");
+}
+
+async function callModel(
+  key: string,
+  model: string,
+  opts: { system: string; turns: ChatTurn[]; json?: boolean; maxTokens?: number; timeoutMs?: number },
+): Promise<string> {
   const res = await fetch(`${process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com"}/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": key },
@@ -31,16 +52,18 @@ export async function geminiGenerate(
       system_instruction: { parts: [{ text: opts.system }] },
       contents: opts.turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
       generationConfig: {
-        maxOutputTokens: opts.maxTokens ?? 1024,
+        // 최근 Gemini 모델은 답 전에 "생각"에 출력 토큰을 쓰므로 넉넉히 준다 (적으면 빈 답이 온다)
+        maxOutputTokens: opts.maxTokens ?? 8192,
         temperature: 0.3,
         ...(opts.json ? { responseMimeType: "application/json" } : {}),
       },
     }),
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 25_000),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 40_000),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const body = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-  const text = body.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-  if (!text.trim()) throw new Error("Gemini 가 빈 답을 보냈습니다.");
+  if (!res.ok) throw new Error(`Gemini ${res.status} (${model}): ${(await res.text()).slice(0, 300)}`);
+  const body = (await res.json()) as { candidates?: { finishReason?: string; content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
+  const cand = body.candidates?.[0];
+  const text = cand?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? "").join("") ?? "";
+  if (!text.trim()) throw new Error(`Gemini 가 빈 답을 보냈습니다 (${model}, ${cand?.finishReason ?? "후보 없음"}).`);
   return text;
 }

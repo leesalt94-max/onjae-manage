@@ -9,6 +9,8 @@ import { CHAT_REPLY_FORMAT, getGuideToken, GUIDE_LANGS, LANG_NAMES, parseChatRep
 
 // 손님 안내 페이지의 채팅. 링크 코드로만 열리고, IP 당 시간 30회·전체 하루 400회까지만 답한다.
 // 질문과 답은 사장님이 볼 수 있게 30일 동안 남긴다 (손님 화면에 알림).
+export const maxDuration = 60;
+
 const PER_IP_HOUR = 30;
 const PER_DAY = 400;
 
@@ -61,12 +63,14 @@ export async function POST(req: NextRequest) {
     `\n\n손님이 고른 화면 언어는 ${LANG_NAMES[lang]}야. 손님이 다른 언어로 물으면 그 언어로 답해. 답은 짧게, 마크다운 기호 없이 일반 문장으로 써.` +
     CHAT_REPLY_FORMAT;
   try {
-    const reply = parseChatReply(await geminiGenerate(sql, { system, turns: messages, maxTokens: 1000, json: true }), photos.map((p) => p.id));
+    const reply = parseChatReply(await geminiGenerate(sql, { system, turns: messages, json: true }), photos.map((p) => p.id));
     const answer = reply.answer;
     await sql`UPDATE guide_chat SET answer = ${answer}, topic = ${reply.topic}, known = ${reply.known}, q_lang = ${reply.language} WHERE id = ${id}`;
     return NextResponse.json({ answer, photos: reply.photos.map((id) => `/guide/${token}/photo/${id}`) }, { headers: { "cache-control": "no-store" } });
   } catch (e) {
     console.error("guide chat", e);
+    // 사장님이 대화 기록에서 원인을 볼 수 있게 남긴다
+    await sql`UPDATE guide_chat SET error = ${(e instanceof Error ? e.message : String(e)).slice(0, 500)} WHERE id = ${id}`.catch(() => undefined);
     return NextResponse.json({ error: "failed" }, { status: 502 });
   }
 }

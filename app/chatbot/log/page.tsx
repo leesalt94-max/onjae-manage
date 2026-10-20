@@ -5,13 +5,13 @@ import { OwnerShell } from "../../nav";
 
 export const dynamic = "force-dynamic";
 
-interface Row { conv_id: string; lang: GuideLang; question: string; answer: string | null; at: string }
+interface Row { conv_id: string; lang: GuideLang; question: string; answer: string | null; error: string | null; at: string }
 
 // 손님이 챗봇과 나눈 대화 (최근 30일). 한 번 페이지를 연 동안의 질문을 한 묶음으로 보여 준다.
 export default async function ChatLogPage() {
   await requireOwner();
   const rows = await db()<Row[]>`
-    SELECT conv_id, lang, question, answer,
+    SELECT conv_id, lang, question, answer, error,
            to_char(created_at AT TIME ZONE 'Asia/Seoul', 'MM/DD HH24:MI') AS at
     FROM guide_chat
     WHERE created_at > now() - interval '30 days'
@@ -38,7 +38,7 @@ export default async function ChatLogPage() {
             {c.turns.map((t, i) => (
               <div key={i} style={{ display: "contents" }}>
                 <div className="me"><p>{t.question}</p></div>
-                <div className={t.answer ? "bot" : "bot bad"}><p>{t.answer ?? "(답하지 못함)"}</p></div>
+                <div className={t.answer ? "bot" : "bot bad"}><p>{t.answer ?? `(답하지 못함${t.error ? `: ${t.error}` : ""})`}</p></div>
               </div>
             ))}
           </div>

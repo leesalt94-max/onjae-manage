@@ -111,8 +111,8 @@ export async function translateGuide(sql: postgres.Sql): Promise<{ ok: GuideLang
             "Keep times, numbers, and addresses as they are. Output only the JSON.",
           turns: [{ role: "user", text: JSON.stringify(translatable(ko)) }],
           json: true,
-          maxTokens: 8192,
-          timeoutMs: 90_000,
+          maxTokens: 32768,
+          timeoutMs: 100_000,
         });
         langs[lang] = mergeTranslation(ko, JSON.parse(text));
         ok.push(lang);

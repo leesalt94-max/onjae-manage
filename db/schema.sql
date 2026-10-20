@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS guide_chat (
   answer     TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE guide_chat ADD COLUMN IF NOT EXISTS error TEXT;
 CREATE INDEX IF NOT EXISTS guide_chat_ip_idx ON guide_chat (ip, created_at DESC);
 CREATE INDEX IF NOT EXISTS guide_chat_created_idx ON guide_chat (created_at DESC);
 
