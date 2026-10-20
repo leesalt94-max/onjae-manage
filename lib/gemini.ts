@@ -3,7 +3,8 @@ import { getSecret, getSetting, setSecret } from "./settings";
 
 // 구글 Gemini API (무료 등급으로 충분). 키는 사장님이 /chatbot 에서 넣고 암호화해 저장한다.
 const KEY = "gemini_api_key";
-const DEFAULT_MODEL = "gemini-flash-latest";
+// 손님 질문에 몇 초 안에 답하도록 "생각"을 끈 2.5 Flash 를 기본으로 쓴다.
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 export async function getGeminiKey(sql: postgres.Sql): Promise<string | null> {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
@@ -17,8 +18,9 @@ export async function setGeminiKey(sql: postgres.Sql, key: string): Promise<void
 
 export interface ChatTurn { role: "user" | "model"; text: string }
 
-// 기본 모델이 없어졌거나(404) 잠깐 붐빌 때(429·500·503) 다음 모델로 한 번 더 시도한다.
-const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+// 기본 모델이 없어졌거나(404) 잠깐 붐비거나(429·500·503) 늦을 때 다음 모델로 한 번 더 시도한다.
+const FALLBACK_MODELS = ["gemini-2.5-flash-lite", "gemini-flash-latest"];
+const RETRYABLE = /Gemini (404|429|500|503)|빈 답|timeout|aborted/i;
 
 export async function geminiGenerate(
   sql: postgres.Sql,
@@ -34,7 +36,7 @@ export async function geminiGenerate(
       return await callModel(key, model, opts);
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e));
-      if (!/Gemini (404|429|500|503)|빈 답/.test(lastError.message)) throw lastError;
+      if (!RETRYABLE.test(`${lastError.name} ${lastError.message}`)) throw lastError;
     }
   }
   throw lastError ?? new Error("Gemini 호출 실패");
@@ -56,9 +58,11 @@ async function callModel(
         maxOutputTokens: opts.maxTokens ?? 8192,
         temperature: 0.3,
         ...(opts.json ? { responseMimeType: "application/json" } : {}),
+        // 2.5 Flash 계열은 생각을 끌 수 있다. 안내 답변에는 생각이 필요 없고, 켜 두면 수십 초씩 걸린다.
+        ...(model.startsWith("gemini-2.5-flash") ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     }),
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 40_000),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 15_000),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status} (${model}): ${(await res.text()).slice(0, 300)}`);
   const body = (await res.json()) as { candidates?: { finishReason?: string; content?: { parts?: { text?: string; thought?: boolean }[] } }[] };

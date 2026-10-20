@@ -28,16 +28,21 @@ export function GuideChat({ token, lang, labels }: { token: string; lang: string
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/guide/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, convId, lang, messages: next.slice(-12).map((t) => ({ role: t.role, text: t.text })) }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (res.status === 429) throw new Error(labels.limit);
-      if (!res.ok || !body.answer) throw new Error(labels.error);
+      const payload = JSON.stringify({ token, convId, lang, messages: next.slice(-12).map((t) => ({ role: t.role, text: t.text })) });
+      // 잠깐 실패하면 손님이 다시 묻지 않아도 되게 한 번 더 보낸다 (질문 횟수 제한에 걸렸을 때는 제외)
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        res = await fetch("/api/guide/chat", { method: "POST", headers: { "content-type": "application/json" }, body: payload }).catch(() => null);
+        if (res && (res.ok || res.status === 429 || res.status === 400 || res.status === 404)) break;
+      }
+      const body = res ? await res.json().catch(() => ({})) : {};
+      if (res?.status === 429) throw new Error(labels.limit);
+      if (!res?.ok || !body.answer) throw new Error(labels.error);
       setTurns([...next, { role: "model", text: body.answer, photos: Array.isArray(body.photos) ? body.photos : [] }]);
     } catch (err) {
+      // 답을 못 받은 질문은 대화에서 빼고 입력칸에 돌려놓아 바로 다시 보낼 수 있게 한다
+      setTurns(turns);
+      setInput(text);
       setError(err instanceof Error ? err.message : labels.error);
     } finally {
       setBusy(false);
