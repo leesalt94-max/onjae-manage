@@ -93,12 +93,13 @@ export async function translationStatus(sql: postgres.Sql): Promise<"none" | "st
 }
 
 // 지금 정보로 4개 언어 번역을 새로 만든다. 언어마다 따로 불러 한 언어가 실패해도 나머지는 남긴다.
-export async function translateGuide(sql: postgres.Sql): Promise<{ ok: GuideLang[]; failed: GuideLang[] }> {
+export async function translateGuide(sql: postgres.Sql): Promise<{ ok: GuideLang[]; failed: GuideLang[]; error?: string }> {
   const ko = await koContent(sql);
   const source = contentHash(ko);
   const langs: Stored["langs"] = {};
   const ok: GuideLang[] = [];
   const failed: GuideLang[] = [];
+  let error: string | undefined;
   await Promise.all(
     GUIDE_LANGS.filter((l) => l !== "ko").map(async (lang) => {
       try {
@@ -118,11 +119,12 @@ export async function translateGuide(sql: postgres.Sql): Promise<{ ok: GuideLang
       } catch (e) {
         console.error("guide translate", lang, e);
         failed.push(lang);
+        error ??= e instanceof Error ? e.message : String(e);
       }
     }),
   );
   await setSetting(sql, I18N_KEY, JSON.stringify({ source, langs } satisfies Stored));
-  return { ok, failed };
+  return { ok, failed, error };
 }
 
 // 손님에게 보내는 링크 코드. 주소·입구 안내가 들어가므로 아무나 찾아 들어오지 못하게 추측 불가능한 코드로 둔다.

@@ -216,15 +216,15 @@ export async function saveGeminiKeyAction(formData: FormData) {
   if (!/^[\x21-\x7e]{20,200}$/.test(key)) back("/chatbot", "API 키 모양이 아니에요. AI Studio 에서 복사한 키를 그대로 붙여 넣어 주세요.", "error");
   const sql = db();
   await setGeminiKey(sql, key);
-  const result = await translateGuide(sql).catch(() => null);
-  if (!result || result.ok.length === 0) back("/chatbot", "키는 저장했지만 Gemini 연결에 실패했어요. 키를 다시 확인해 주세요.", "error");
+  const result = await translateGuide(sql).catch((e: unknown) => ({ ok: [], failed: [], error: e instanceof Error ? e.message : String(e) }));
+  if (result.ok.length === 0) back("/chatbot", `키는 저장했지만 Gemini 연결에 실패했어요. 키를 다시 확인해 주세요.\n(오류: ${(result.error ?? "").slice(0, 200)})`, "error");
   back("/chatbot", "API 키를 저장하고 번역을 만들었어요. 이제 손님 페이지에 채팅창이 보여요.");
 }
 
 export async function translateGuideAction() {
   await requireOwner();
-  const result = await translateGuide(db()).catch(() => null);
-  if (!result || result.ok.length === 0) back("/chatbot", "번역에 실패했어요. 잠시 뒤 다시 눌러 주세요.", "error");
+  const result = await translateGuide(db()).catch((e: unknown) => ({ ok: [], failed: [], error: e instanceof Error ? e.message : String(e) }));
+  if (result.ok.length === 0) back("/chatbot", `번역에 실패했어요. 잠시 뒤 다시 눌러 주세요.\n(오류: ${(result.error ?? "").slice(0, 200)})`, "error");
   back("/chatbot", result.failed.length ? `번역을 만들었어요. 일부 언어는 실패해서 다시 눌러야 해요.` : "번역을 새로 만들었어요.");
 }
 
