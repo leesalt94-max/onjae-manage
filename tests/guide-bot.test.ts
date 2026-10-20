@@ -10,8 +10,8 @@ test("gem", () => {
 
 import { parseChatReply, pickLang } from "@/lib/guide-page";
 test("chat reply parse", () => {
-  expect(parseChatReply('{"answer":"11시예요","topic":"checkin","known":true,"language":"ko"}')).toEqual({ answer: "11시예요", topic: "checkin", known: true, language: "ko" });
-  expect(parseChatReply('{"answer":"모르겠어요","topic":"weird","known":false,"language":"xx"}')).toEqual({ answer: "모르겠어요", topic: "other", known: false, language: "other" });
+  expect(parseChatReply('{"answer":"11시예요","topic":"checkin","known":true,"language":"ko"}')).toEqual({ answer: "11시예요", topic: "checkin", known: true, language: "ko", photos: [] });
+  expect(parseChatReply('{"answer":"모르겠어요","topic":"weird","known":false,"language":"xx"}')).toEqual({ answer: "모르겠어요", topic: "other", known: false, language: "other", photos: [] });
   expect(parseChatReply("plain text").answer).toBe("plain text");
 });
 test("pick lang", () => {
