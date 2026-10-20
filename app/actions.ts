@@ -211,8 +211,9 @@ export async function saveGuideBotAction(formData: FormData) {
 
 export async function saveGeminiKeyAction(formData: FormData) {
   await requireOwner();
-  const key = String(formData.get("geminiKey") ?? "").trim();
-  if (!/^[A-Za-z0-9_-]{20,100}$/.test(key)) back("/chatbot", "API 키 모양이 아니에요. AI Studio 에서 복사한 키를 그대로 붙여 넣어 주세요.", "error");
+  // 앞뒤 따옴표·공백이 같이 복사되는 경우가 많아 걷어 낸다. 키 형식은 바뀔 수 있어 글자 종류는 넓게 받는다.
+  const key = String(formData.get("geminiKey") ?? "").trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, "").trim();
+  if (!/^[\x21-\x7e]{20,200}$/.test(key)) back("/chatbot", "API 키 모양이 아니에요. AI Studio 에서 복사한 키를 그대로 붙여 넣어 주세요.", "error");
   const sql = db();
   await setGeminiKey(sql, key);
   const result = await translateGuide(sql).catch(() => null);
