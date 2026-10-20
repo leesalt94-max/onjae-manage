@@ -54,8 +54,9 @@ export async function POST(req: NextRequest) {
 
   const [data, photos] = await Promise.all([getGuideData(sql), listGuidePhotos(sql)]);
   const photoList = photos.length
-    ? "\n\n[사진 목록] 답과 관련된 사진이 있으면 photos 에 id 를 넣어. 사진은 손님 화면에 답 아래 함께 보여.\n" +
-      photos.map((p) => `- id ${p.id}: ${p.caption}`).join("\n")
+    ? "\n\n[사진 목록] 답과 관련된 사진이 있으면 photos 에 id 를 넣어. 사진은 손님 화면에 답 아래 그대로 보여. " +
+      "사진 속 안내 글은 한국어나 영어로만 적혀 있으니, 사진을 보낼 때는 사진 내용(아래 '사진 내용')을 바탕으로 해야 할 일을 손님 언어로 답에 직접 풀어서 설명해. \"사진을 확인하세요\"로만 끝내지 마.\n" +
+      photos.map((p) => `- id ${p.id}: ${p.caption}${p.aiText ? `\n  사진 내용: ${p.aiText.replace(/\s*\n\s*/g, " / ")}` : ""}`).join("\n")
     : "";
   const system =
     buildGemInstructions(data) +

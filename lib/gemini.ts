@@ -16,7 +16,7 @@ export async function setGeminiKey(sql: postgres.Sql, key: string): Promise<void
   await setSecret(sql, KEY, key);
 }
 
-export interface ChatTurn { role: "user" | "model"; text: string }
+export interface ChatTurn { role: "user" | "model"; text: string; image?: { mime: string; data: Buffer } }
 
 // 기본 모델이 없어졌거나(404) 잠깐 붐비거나(429·500·503) 늦을 때 다음 모델로 한 번 더 시도한다.
 const FALLBACK_MODELS = ["gemini-2.5-flash-lite", "gemini-flash-latest"];
@@ -52,7 +52,10 @@ async function callModel(
     headers: { "content-type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: opts.system }] },
-      contents: opts.turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+      contents: opts.turns.map((t) => ({
+        role: t.role,
+        parts: [...(t.image ? [{ inline_data: { mime_type: t.image.mime, data: t.image.data.toString("base64") } }] : []), { text: t.text }],
+      })),
       generationConfig: {
         // 최근 Gemini 모델은 답 전에 "생각"에 출력 토큰을 쓰므로 넉넉히 준다 (적으면 빈 답이 온다)
         maxOutputTokens: opts.maxTokens ?? 8192,

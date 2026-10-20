@@ -13,7 +13,7 @@ import { guestsFromForm, MAX_GUESTS, REGION_LABELS, regionFromForm, saveGuestPro
 import { findSecret, GUIDE_FIELDS, MAX_EXTRA, saveGuideData } from "@/lib/guide-bot";
 import { getGeminiKey, setGeminiKey } from "@/lib/gemini";
 import { resetGuideToken, translateGuide } from "@/lib/guide-page";
-import { addGuidePhoto, countGuidePhotos, deleteGuidePhoto, MAX_PHOTO_BYTES, MAX_PHOTOS, PHOTO_MIMES } from "@/lib/guide-photos";
+import { addGuidePhoto, countGuidePhotos, describeMissingPhotos, deleteGuidePhoto, MAX_PHOTO_BYTES, MAX_PHOTOS, PHOTO_MIMES } from "@/lib/guide-photos";
 import { answerOtp } from "@/lib/otp";
 import { isXls, xlsToCsv } from "@/lib/parsers/xls";
 import { xlsxToCsv } from "@/lib/parsers/xlsx";
@@ -216,6 +216,7 @@ export async function saveGeminiKeyAction(formData: FormData) {
   if (!/^[\x21-\x7e]{20,200}$/.test(key)) back("/chatbot", "API 키 모양이 아니에요. AI Studio 에서 복사한 키를 그대로 붙여 넣어 주세요.", "error");
   const sql = db();
   await setGeminiKey(sql, key);
+  after(() => describeMissingPhotos(sql).then(() => undefined));
   const result = await translateGuide(sql).catch((e: unknown) => ({ ok: [], failed: [], error: e instanceof Error ? e.message : String(e) }));
   if (result.ok.length === 0) back("/chatbot", `키는 저장했지만 Gemini 연결에 실패했어요. 키를 다시 확인해 주세요.\n(오류: ${(result.error ?? "").slice(0, 200)})`, "error");
   back("/chatbot", "API 키를 저장하고 번역을 만들었어요. 이제 손님 페이지에 채팅창이 보여요.");
@@ -252,8 +253,9 @@ export async function addGuidePhotoAction(formData: FormData) {
   const sql = db();
   if ((await countGuidePhotos(sql)) >= MAX_PHOTOS) back("/chatbot", `사진은 ${MAX_PHOTOS}장까지 올릴 수 있어요.`, "error");
   await addGuidePhoto(sql, { field, caption, mime: file.type, data: Buffer.from(await file.arrayBuffer()) });
+  after(() => describeMissingPhotos(sql).then(() => undefined));
   await retranslateLater(sql);
-  back("/chatbot", "사진을 올렸어요.");
+  back("/chatbot", "사진을 올렸어요. 챗봇이 사진 속 글을 읽는 데 30초쯤 걸려요.");
 }
 
 export async function deleteGuidePhotoAction(formData: FormData) {
@@ -262,4 +264,14 @@ export async function deleteGuidePhotoAction(formData: FormData) {
   await deleteGuidePhoto(sql, String(formData.get("id") ?? ""));
   await retranslateLater(sql);
   back("/chatbot", "사진을 지웠어요.");
+}
+
+export async function rereadGuidePhotoAction(formData: FormData) {
+  await requireOwner();
+  const id = String(formData.get("id") ?? "");
+  if (!/^\d{1,18}$/.test(id)) back("/chatbot", "사진을 찾지 못했어요.", "error");
+  const sql = db();
+  await sql`UPDATE guide_photos SET ai_text = NULL WHERE id = ${id}`;
+  after(() => describeMissingPhotos(sql).then(() => undefined));
+  back("/chatbot", "사진을 다시 읽고 있어요. 30초쯤 뒤 새로고침해 주세요.");
 }

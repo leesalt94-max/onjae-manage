@@ -4,12 +4,13 @@ import { db } from "@/lib/db";
 import { getGeminiKey } from "@/lib/gemini";
 import { getGuideToken, translationStatus } from "@/lib/guide-page";
 import { buildGemInstructions, filledCount, getGuideData, GUIDE_FIELDS, GUIDE_SECTIONS, MAX_EXTRA } from "@/lib/guide-bot";
-import { deleteGuidePhotoAction, resetGuideTokenAction, saveGeminiKeyAction, saveGuideBotAction, translateGuideAction } from "../actions";
+import { deleteGuidePhotoAction, rereadGuidePhotoAction, resetGuideTokenAction, saveGeminiKeyAction, saveGuideBotAction, translateGuideAction } from "../actions";
 import { Flash, type SearchParams } from "../flash";
 import { OwnerShell } from "../nav";
 import { CopyBox } from "./copy-box";
 import { PhotoUpload } from "./photo-upload";
-import { listGuidePhotos, MAX_PHOTOS } from "@/lib/guide-photos";
+import { describeMissingPhotos, listGuidePhotos, MAX_PHOTOS } from "@/lib/guide-photos";
+import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 // API 키를 넣거나 번역을 다시 만들 때 4개 언어 번역을 기다린다
@@ -27,6 +28,8 @@ export default async function ChatbotPage({ searchParams }: { searchParams: Sear
   const sql = db();
   const [data, token, key, tr, h] = await Promise.all([getGuideData(sql), getGuideToken(sql, true), getGeminiKey(sql), translationStatus(sql), headers()]);
   const photos = await listGuidePhotos(sql);
+  // 키를 넣기 전에 올린 사진처럼 아직 읽지 않은 사진이 있으면 화면을 연 김에 읽어 둔다
+  if (key && photos.some((p) => !p.aiText)) after(() => describeMissingPhotos(sql).then(() => undefined));
   const fieldLabel = (k: string | null) => GUIDE_FIELDS.find((f) => f.key === k)?.label;
   const [{ recent }] = await sql<{ recent: number }[]>`SELECT count(*)::int AS recent FROM guide_chat WHERE created_at > now() - interval '7 days'`;
   const link = `https://${h.get("x-forwarded-host") ?? h.get("host")}/guide/${token}`;
@@ -156,10 +159,22 @@ export default async function ChatbotPage({ searchParams }: { searchParams: Sear
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`/guide/${token}/photo/${p.id}`} alt={p.caption} />
                 <figcaption className="small">{p.caption}{fieldLabel(p.field) ? <span className="muted"> · {fieldLabel(p.field)}</span> : null}</figcaption>
-                <form action={deleteGuidePhotoAction}>
-                  <input type="hidden" name="id" value={p.id} />
-                  <button type="submit" className="secondary" style={{ marginTop: 4, padding: "4px 10px" }}>지우기</button>
-                </form>
+                <details className="small" style={{ marginTop: 4 }}>
+                  <summary className="muted">{p.aiText ? "챗봇이 읽은 내용" : key ? "읽는 중… (잠시 뒤 새로고침)" : "API 키를 넣으면 읽어요"}</summary>
+                  {p.aiText && <p style={{ whiteSpace: "pre-line", margin: "4px 0" }}>{p.aiText}</p>}
+                </details>
+                <div className="row" style={{ marginTop: 4, gap: 4 }}>
+                  <form action={deleteGuidePhotoAction}>
+                    <input type="hidden" name="id" value={p.id} />
+                    <button type="submit" className="secondary" style={{ padding: "4px 10px" }}>지우기</button>
+                  </form>
+                  {key && (
+                    <form action={rereadGuidePhotoAction}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <button type="submit" className="secondary" style={{ padding: "4px 10px" }}>다시 읽기</button>
+                    </form>
+                  )}
+                </div>
               </figure>
             ))}
           </div>

@@ -125,3 +125,5 @@ CREATE TABLE IF NOT EXISTS guide_photos (
   data       BYTEA NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- 사진 속 글과 내용을 Gemini 가 읽어 한국어로 적어 둔 것. 챗봇이 이걸 보고 손님 언어로 설명한다.
+ALTER TABLE guide_photos ADD COLUMN IF NOT EXISTS ai_text TEXT;
